@@ -1,0 +1,86 @@
+
+                  ฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿
+                          SOURCER DEFINITION FILE
+                  ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 1: CONTROL INFORMATION   ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+Analysis Options = a b c d e f g h i j k l m n o p Q R S t u v w x y z
+uP               = 8088
+File format      = lst
+Label type       = Decimal
+Remarks          = All
+Segment display  = Hex
+Target Assembler = NONE
+Input filename   = testyn.exe
+Code style       = Exe
+Header           = TESTYN v1.02(c) 1988	V Communica
+Drive (output)   = Z
+Output filename  = test.lst
+Passes           = 9
+Xref             = ON
+
+
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 2: RANGE DEFINITION      ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+ ออออ Segments ออออออออออออออออออออออออออ
+
+  begin      end      default	   seg	 seg          seg
+ seg:off     off     ds     es	   type	 size         value
+ -------     ----    ----   ----   ----- -----        -----
+020C:0746    0946    020C   020C   auto	 use16       ; 020C
+seg_b:0000   00BF    0000   0000   stack use16       ; 7E1C
+seg_c:0000   003D    seg_c  seg_c  auto	 use16       ; 7E28
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 3: REFERENCE DEFINITIONS ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+ ออออ Subroutines อออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+020C:07B9    sub			       ; sub_1
+020C:0870    sub			       ; sub_2
+
+ ออออ Locations อออออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+020C:0760    loc			       ; loc_1
+020C:077C    loc			       ; loc_2
+020C:078E    loc			       ; loc_3
+020C:07A3    loc			       ; loc_4
+020C:07A5    loc			       ; loc_5
+020C:07D0    loc			       ; loc_6
+020C:07D5    loc			       ; loc_7
+020C:07D8    loc			       ; loc_ret_8
+020C:07F8    loc			       ; loc_9
+020C:07FD    loc			       ; loc_10
+020C:0800    loc			       ; loc_ret_11
+020C:0855    loc			       ; loc_12
+020C:0860    loc			       ; loc_13
+020C:086B    loc			       ; loc_14
+020C:087D    forced, od B000
+020C:091B    loc			       ; loc_15
+020C:0950    loc			       ; loc_16
+020C:0955    loc			       ; loc_17
+7E17:0000    loc, far		start
+seg_c:000E   loc			       ; loc_18
+seg_c:0015   loc			       ; locloop_19
+seg_c:001E   loc			       ; locloop_20
+seg_c:0024   forced, od seg_c
+
+ ออออ Data Items ออออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+0000:0070    dw, equ, r 2		       ; data_1e
+0040:003F    db, equ			       ; data_2e
+0040:0040    db, equ			       ; data_3e
+0040:006C    dw, equ			       ; data_4e
+0040:006E    dw, equ			       ; data_5e
+0040:0070    db, equ			       ; data_6e
+0040:0314    dw, equ			       ; data_7e
+020C:0802    dw				       ; data_8
+020C:0804    dw				       ; data_9
+020C:08A8    db				       ; data_10
+seg_c:002C   da, r 0C			       ; data_12
+seg_c:003A   dw				       ; data_13
+B000:B000    db, equ			       ; data_14e

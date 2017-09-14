@@ -1,0 +1,2226 @@
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 1
+prim1.asm
+
+
+
+      1					 ;/*
+      2					 ; Пример 1
+      3					 ; Программа перехода в	защищенный режим и обратно
+      4					 ; Данная программа является базовой для всех остальных	примеров
+      5					 ;
+      6
+      7					 .386p
+      8
+      9					 include struct.ash
+1    10					 ;/*
+1    11					 ; биты	состояния дескриптора сегмента в байте состояния
+1    12		  =0001			 ACC_ACCESS	 EQU	 00000001b ; бит регистрации обращения
+1    13		  =0002			 ACC_DATAWR	 EQU	 00000010b ; разрешена запись в	данные
+1    14		  =0002			 ACC_CODERD	 EQU	 00000010b ; разрешено чтение кодов
+1    15		  =0004			 ACC_EXPDOWN	 EQU	 00000100b ; сегмент расширяется вниз (для стека)
+1    16		  =0004			 ACC_CONFORM	 EQU	 00000100b ; подчиненный сегмент      (для кода)
+1    17
+1    18		  =0001			 ACC_TSS2	 EQU	 00000001b ; дескриптор	TSS 286	свободен (01h)
+1    19		  =0002			 ACC_LDT	 EQU	 00000010b ; дескриптор	LDT		 (02h)
+1    20		  =0002			 ACC_TSSBSY	 EQU	 00000010b ; признак - TSS 286/386 занят (02h)
+1    21		  =0003			 ACC_TSS2B	 EQU	 00000011b ; дескриптор	TSS 286	занят	 (03h)
+1    22		  =0004			 ACC_CALL2	 EQU	 00000100b ; вентиль вызова 286		 (04h)
+1    23		  =0005			 ACC_TASK	 EQU	 00000101b ; вентиль задачи 286/386	 (05h)
+1    24		  =0006			 ACC_INT2	 EQU	 00000110b ; вентиль прерывания	286	 (06h)
+1    25		  =0007			 ACC_TRAP2	 EQU	 00000111b ; вентиль ловушки 286	 (07h)
+1    26		  =0009			 ACC_TSS3	 EQU	 00001001b ; дескриптор	TSS 386	свободен (09h)
+1    27		  =000B			 ACC_TSS3B	 EQU	 00001011b ; дескриптор	TSS 386	занят	 (0bh)
+1    28		  =000C			 ACC_CALL3	 EQU	 00001100b ; вентиль вызова 386		 (0ch)
+1    29		  =000E			 ACC_INT3	 EQU	 00001110b ; вентиль прерывания	386	 (0eh)
+1    30		  =000F			 ACC_TRAP3	 EQU	 00001111b ; вентиль ловушки 386	 (0fh)
+1    31
+1    32		  =0010			 ACC_DSEG	 EQU	 00010000b ; сегмент данных
+1    33		  =0018			 ACC_CSEG	 EQU	 00011000b ; сегмент кода
+1    34		  =0060			 ACC_DPLMSK	 EQU	 01100000b ; маска привелегий доступа (0-высший)
+1    35		  =0080			 ACC_PRESENT	 EQU	 10000000b ; присутствие сегмента кода в памяти
+1    36					 ;
+1    37					 ; биты	состояния дескриптора сегмента в расширенном байте состояния
+1    38		  =0010			 ACC2_AVAIL	 EQU	 00010000b ; разрешено для использ. программ
+1    39		  =0040			 ACC2_B_BIG	 EQU	 01000000b ; размер операнда по	умолчанию 32bit	(i386)
+1    40		  =0000			 ACC2_B_SMALL	 EQU	 00000000b ; размер операнда по	умолчанию 16bit	(i386)
+1    41		  =0080			 ACC2_G_PAGE	 EQU	 10000000b ; дробность сегмента	4кбайта		(i386)
+1    42		  =0000			 ACC2_G_BYTE	 EQU	 00000000b ; дробность сегмента	1байт		(i386)
+1    43					 ;
+1    44					 ;  типы сегментов
+1    45					 ;  сегмент данных
+1    46		  =0092			 DATA_ACC = ACC_PRESENT	OR ACC_DSEG OR ACC_DATAWR
+1    47
+1    48					 ; сегмент кода
+1    49		  =009A			 CODE_ACC = ACC_PRESENT	OR ACC_CSEG OR ACC_CODERD
+1    50
+1    51					 ; согласованный сегмент кода
+1    52		  =009A			 CONF_ACC = ACC_PRESENT	OR ACC_CSEG OR ACC_CODERD; OR ACC_CONFORM
+1    53
+1    54					 ; сегмент стека
+1    55		  =0096			 STACK_ACC= ACC_PRESENT	OR ACC_DSEG OR ACC_DATAWR OR ACC_EXPDOWN
+1    56
+1    57					 ; сегменты данных и стека в формате DOS
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 2
+prim1.asm
+
+
+
+1    58		  =0092			 DATA_REAL= ACC_PRESENT	OR ACC_DSEG OR ACC_DATAWR
+1    59		  =009A			 CODE_REAL= ACC_PRESENT	OR ACC_CSEG OR ACC_CODERD
+1    60
+1    61					 ; системные сегменты
+1    62		  =0089			 TSS_ACC  = ACC_PRESENT	OR ACC_TSS3
+1    63		  =008C			 CALL_ACC = ACC_PRESENT	OR ACC_CALL3
+1    64		  =008E			 INT_ACC  = ACC_PRESENT	OR ACC_INT3
+1    65		  =008F			 TRAP_ACC = ACC_PRESENT	OR ACC_TRAP3
+1    66		  =0085			 TASK_ACC = ACC_PRESENT	OR ACC_TASK
+1    67
+1    68					 ; Привелегии доступа к	сегменту в дескрипторе сегмента	(DPL)
+1    69		  =0000			 DPL_0		 equ	 00000000b
+1    70		  =0020			 DPL_1		 equ	 00100000b
+1    71		  =0040			 DPL_2		 equ	 01000000b
+1    72		  =0060			 DPL_3		 equ	 01100000b
+1    73
+1    74					 ; Привелегии доступа к	сегменту в селекторе (RPL)
+1    75		  =0000			 RPL_0		 equ	 00000000b
+1    76		  =0001			 RPL_1		 equ	 00000001b
+1    77		  =0002			 RPL_2		 equ	 00000010b
+1    78		  =0003			 RPL_3		 equ	 00000011b
+1    79
+1    80					 ; Признак ссылки селектора на таблицу дескрипторов
+1    81		  =0004			 TBL_LDT	 equ	 00000100b ; селектор ссылается	на LDT
+1    82		  =0000			 TBL_GDT	 equ	 00000000b ; селектор ссылается	на GDT
+1    83		  =FFF8			 TBL_ADDR	 equ	 0fff8h	   ; индекс дескриптора	в селекторе
+1    84
+1    85					 ; Общие константы адресов и размеров сегментов	системы
+1    86		  =0400			 STACK_SIZE	 EQU	 00400h	  ; размер стека
+1    87		  =0300			 B_DATA_SIZE	 EQU	 00300h	  ; размер области данных BIOS
+1    88		  =0400			 B_DATA_ADDR	 EQU	 00400h	  ; адрес  области данных BIOS
+1    89		  =B000			 MONO_SEG	 EQU	 0b000h	  ; cегмент видеопамяти	монохромного адаптера
+1    90		  =B800			 COLOR_SEG	 EQU	 0b800h	  ; сегмент видеопамяти	цветного видеоадаптера
+1    91		  =8000			 CRT_SIZE	 EQU	  8000h	  ; размер сегмента видеопамяти
+1    92		  =1000			 MONO_SIZE	 EQU	  1000h	  ; размер сегмента видеопамяти
+1    93		  =000B8000		 CRT_ADDR	 EQU	0b8000h	  ; полный адрес видеопамяти color
+1    94		  =000B0000		 MONO_ADDR	 EQU	0b0000h	  ; полный адрес видеопамяти mono
+1    95		  =000B			 CRT_SEG	 EQU	    0Bh	  ; старший байт физ. адреса видеопамяти
+1    96		  =8000			 CRT_LOW	 EQU	  8000h	  ; младшее слово физ. адреса видеопамяти
+1    97		  =0000			 MONO_LOW	 EQU	  0000h	  ; младшее слово физ. адреса видеопамяти
+1    98					 ; Значения портов и констант системы
+1    99		  =0070			 CMOS_PORT	 EQU	    70h	  ; Порт для доступа к CMOS-памяти
+1   100		  =0063			 PORT_6845	 EQU	    63h	  ; Адрес области данных BIOS, где
+1   101									  ; хранится адрес порта контроллера
+1   102									  ; 6845
+1   103		  =03D4			 COLOR_PORT	 EQU	  03d4h	  ; Порт цветного видеоконтроллера
+1   104		  =03B4			 MONO_PORT	 EQU	  03b4h	  ; Порт монохромного видеоконтроллера
+1   105		  =0064			 STATUS_PORT	 EQU	   064h	  ; Порт состояния клавиатуры
+1   106		  =00FE			 SHUT_DOWN	 EQU	   0feh	  ; Команда сброса процессора
+1   107		  =0001			 VIRTUAL_MODE	 EQU	  0001h	  ; Бит	перехода в защищенный режим
+1   108		  =00D1			 A20_PORT	 EQU	   0d1h	  ; Команда управления линией A20
+1   109		  =00DF			 A20_ON		 EQU	   0dfh	  ; Открыть А20
+1   110		  =00DD			 A20_OF		 EQU	   0ddh	  ; Закрыть А20
+1   111		  =0060			 KBD_PORT_A	 EQU	   060h	  ; Адреса портов клавиатуры
+1   112		  =0061			 KBD_PORT_B	 EQU	   061h	  ;
+1   113		  =0021			 INT_MASK_PORT	 EQU	   021h	  ; Порт для маскирования прерываний
+1   114					 ;
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 3
+prim1.asm
+
+
+
+1   115					 ;
+1   116					 ; Описание структуры дискриптора сегмента
+1   117	00000000			 dscp	 struc
+1   118	00000000  01*(0000)			 D_lim1	   dw	 0
+1   119	00000002  01*(0000)			 D_base1   dw	 0
+1   120	00000004  01*(00)			 D_base2   db	 0
+1   121	00000005  01*(00)			 D_type	   db	 0
+1   122	00000006  01*(00)			 D_lim2	   db	 0
+1   123	00000007  01*(00)			 D_base3   db	 0
+1   124	00000008			 dscp	 ends
+1   125
+1   126					 ;
+1   127					 ; Заполнение дескриптора сегмента кода
+1   128					 d_code	 macro limit,base,type1,type2
+1   129						 dw    (offset (limit))	and 00000ffffh
+1   130						 dw    (base) and 00000ffffh
+1   131						 db    ((base) and 000ff0000h) shr 10h
+1   132						 db    (type1)
+1   133						 db    (((offset (limit)) and 0000f0000h) shr 10h) or (type2)
+1   134						 db    ((base) and 0ff000000h) shr 18h
+1   135					 endm
+1   136					 ;
+1   137					 ; Заполнение дескриптора сегмента данных
+1   138					 d_data	 macro limit,base,type1,type2
+1   139						 dw    (offset (limit))	and 00000ffffh
+1   140						 dw    (base) and 00000ffffh
+1   141						 db    ((base) and 000ff0000h) shr 10h
+1   142						 db    (type1)
+1   143						 db    (((offset (limit)) and 0000f0000h) shr 10h) or (type2)
+1   144						 db    ((base) and 0ff000000h) shr 18h
+1   145					 endm
+1   146					 ;
+1   147					 ; Заполнение дескриптора вентиля задачи
+1   148					 d_task	 macro selector,type
+1   149						 dw    0h
+1   150						 dw    (selector)
+1   151						 db    0h
+1   152						 db    (type)
+1   153						 dw    0h
+1   154					 endm
+1   155					 ;
+1   156					 ; Заполнение дескриптора вентиля вызова
+1   157					 d_call	 macro offs,selector,type,count
+1   158						 dw    (offset (offs)) and 00000ffffh
+1   159						 dw    (selector)
+1   160						 db    (count) and 01fh
+1   161						 db    (type)
+1   162						 dw    ((offset	(offs))	and 0ffff0000h)	shr 10h
+1   163					 endm
+1   164					 ;
+1   165					 ; Заполнение дескриптора вентиля прерывания
+1   166					 d_int	 macro offs,selector,type
+1   167						 dw    (offset (offs)) and 00000ffffh
+1   168						 dw    (selector)
+1   169						 db    0h
+1   170						 db    (type)
+1   171						 dw    ((offset	(offs))	and 0ffff0000h)	shr 10h
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 4
+prim1.asm
+
+
+
+1   172					 endm
+1   173					 ;
+1   174					 ; Заполнение дескриптора сегмента LDT
+1   175					 d_ldt	 macro limit,base,type1,type2
+1   176						 dw    (offset (limit))	and 00000ffffh
+1   177						 dw    (base) and 00000ffffh
+1   178						 db    ((base) and 000ff0000h) shr 10h
+1   179						 db    (type1)
+1   180						 db    (((offset (limit)) and 0000f0000h) shr 10h) or (type2)
+1   181						 db    ((base) and 0ff000000h) shr 18h
+1   182					 endm
+1   183					 ;
+1   184					 ; Заполнение дескриптора сегмента TSS
+1   185					 d_tss	 macro limit,base,type1,type2
+1   186						 dw    (offset (limit))	and 00000ffffh
+1   187						 dw    (base) and 00000ffffh
+1   188						 db    ((base) and 000ff0000h) shr 10h
+1   189						 db    (type1)
+1   190						 db    (((offset (limit)) and 0000f0000h) shr 10h) or (type2)
+1   191						 db    ((base) and 0ff000000h) shr 18h
+1   192					 endm
+1   193
+1   194					 ;
+1   195					 ; Структура сегмента TSS 386
+1   196	00000000			 tss386df	 struc
+1   197	00000000  01*(00000000)			 T_eblink  dd	 0
+1   198	00000004  01*(00000000)			 T_esp0	   dd	 0
+1   199	00000008  01*(00000000)			 T_ess0	   dd	 0
+1   200	0000000C  01*(00000000)			 T_esp1	   dd	 0
+1   201	00000010  01*(00000000)			 T_ess1	   dd	 0
+1   202	00000014  01*(00000000)			 T_esp2	   dd	 0
+1   203	00000018  01*(00000000)			 T_ess2	   dd	 0
+1   204	0000001C  01*(00000000)			 T_cr3	   dd	 0
+1   205	00000020  01*(00000000)			 T_eip	   dd	 0
+1   206	00000024  01*(00000000)			 T_eflags  dd	 0
+1   207	00000028  01*(00000000)			 T_eax	   dd	 0
+1   208	0000002C  01*(00000000)			 T_ecx	   dd	 0
+1   209	00000030  01*(00000000)			 T_edx	   dd	 0
+1   210	00000034  01*(00000000)			 T_ebx	   dd	 0
+1   211	00000038  01*(00000000)			 T_esp	   dd	 0
+1   212	0000003C  01*(00000000)			 T_ebp	   dd	 0
+1   213	00000040  01*(00000000)			 T_esi	   dd	 0
+1   214	00000044  01*(00000000)			 T_edi	   dd	 0
+1   215	00000048  01*(00000000)			 T_ees	   dd	 0
+1   216	0000004C  01*(00000000)			 T_ecs	   dd	 0
+1   217	00000050  01*(00000000)			 T_ess	   dd	 0
+1   218	00000054  01*(00000000)			 T_eds	   dd	 0
+1   219	00000058  01*(00000000)			 T_efs	   dd	 0
+1   220	0000005C  01*(00000000)			 T_egs	   dd	 0
+1   221	00000060  01*(00000000)			 T_eldt	   dd	 0
+1   222	00000064  01*(0000)			 T_trap	   dw	 0
+1   223	00000066  01*(0000)			 T_iom	   dw	 0
+1   224	00000068			 tss386df	 ends
+1   225
+1   226					 ;
+1   227					 ; Структура сегмента TSS 286
+1   228	00000000			 tss286df	 struc
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 5
+prim1.asm
+
+
+
+1   229	00000000  01*(0000)			 T_blink   dw	 0
+1   230	00000002  01*(0000)			 T_sp0	   dw	 0
+1   231	00000004  01*(0000)			 T_ss0	   dw	 0
+1   232	00000006  01*(0000)			 T_sp1	   dw	 0
+1   233	00000008  01*(0000)			 T_ss1	   dw	 0
+1   234	0000000A  01*(0000)			 T_sp2	   dw	 0
+1   235	0000000C  01*(0000)			 T_ss2	   dw	 0
+1   236	0000000E  01*(0000)			 T_ip	   dw	 0
+1   237	00000010  01*(0000)			 T_flags   dw	 0
+1   238	00000012  01*(0000)			 T_ax	   dw	 0
+1   239	00000014  01*(0000)			 T_cx	   dw	 0
+1   240	00000016  01*(0000)			 T_dx	   dw	 0
+1   241	00000018  01*(0000)			 T_bx	   dw	 0
+1   242	0000001A  01*(0000)			 T_sp	   dw	 0
+1   243	0000001C  01*(0000)			 T_bp	   dw	 0
+1   244	0000001E  01*(0000)			 T_si	   dw	 0
+1   245	00000020  01*(0000)			 T_di	   dw	 0
+1   246	00000022  01*(0000)			 T_es	   dw	 0
+1   247	00000024  01*(0000)			 T_cs	   dw	 0
+1   248	00000026  01*(0000)			 T_ss	   dw	 0
+1   249	00000028  01*(0000)			 T_ds	   dw	 0
+1   250	0000002A  01*(0000)			 T_ldt	   dw	 0
+1   251	0000002C			 tss286df	 ends
+1   252
+1   253					 ;
+1   254					 ; Структура stack after pushad
+1   255	00000000			 pushaddef	 struc
+1   256	00000000  01*(00000000)			 P_edi	   dd	 0
+1   257	00000004  01*(00000000)			 P_esi	   dd	 0
+1   258	00000008  01*(00000000)			 P_ebp	   dd	 0
+1   259	0000000C  01*(00000000)			 P_esp	   dd	 0
+1   260	00000010  01*(00000000)			 P_ebx	   dd	 0
+1   261	00000014  01*(00000000)			 P_edx	   dd	 0
+1   262	00000018  01*(00000000)			 P_ecx	   dd	 0
+1   263	0000001C  01*(00000000)			 P_eax	   dd	 0
+1   264	00000020			 pushaddef	 ends
+1   265					 ;
+1   266					 ; Структура stack after pusha
+1   267	00000000			 pushadef	 struc
+1   268	00000000  01*(0000)			 P_di	   dw	 0
+1   269	00000002  01*(0000)			 P_si	   dw	 0
+1   270	00000004  01*(0000)			 P_bp	   dw	 0
+1   271	00000006  01*(0000)			 P_sp	   dw	 0
+1   272	00000008  01*(0000)			 P_bx	   dw	 0
+1   273	0000000A  01*(0000)			 P_dx	   dw	 0
+1   274	0000000C  01*(0000)			 P_cx	   dw	 0
+1   275	0000000E  01*(0000)			 P_ax	   dw	 0
+1   276	00000010			 pushadef	 ends
+1   277
+1   278					 ;
+1   279					 ; Структура стека 386 после прерывания
+1   280	00000000			 intstk386  struc
+1   281	00000000  01*(00000000)			 oldeip	   dd	 0		 ; all interrupts frame
+1   282	00000004  01*(00000000)			 oldecs	   dd	 0
+1   283	00000008  01*(00000000)			 oldeflg   dd	 0
+1   284					 intnolvl386len	   label
+1   285					 ;--------------------------
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 6
+prim1.asm
+
+
+
+1   286	0000000C  01*(00000000)			 oldesp	   dd	 0		 ; privelege level change add frame
+1   287	00000010  01*(00000000)			 oldess	   dd	 0
+1   288					 intlvl386len	   label
+1   289					 ;--------------------------
+1   290	00000014  01*(00000000)			 oldees	   dd	 0		 ; v86 interrupts add frame
+1   291	00000018  01*(00000000)			 oldeds	   dd	 0
+1   292	0000001C  01*(00000000)			 oldefs	   dd	 0
+1   293	00000020  01*(00000000)			 oldegs	   dd	 0
+1   294					 v86stklen	   label
+1   295	00000024			 intstk386  ends
+1   296
+1   297					 ;
+1   298					 ; Структура стека 286 после прерывания
+1   299	00000000			 intstk286  struc
+1   300	00000000  01*(0000)			 oldip	   dw	 0		 ; all interrupts frame
+1   301	00000002  01*(0000)			 oldcs	   dw	 0
+1   302	00000004  01*(0000)			 oldflg	   dw	 0
+1   303					 intnolvl286len	   label
+1   304					 ;--------------------------
+1   305	00000006  01*(0000)			 oldsp	   dw	 0		 ; privelege level change add frame
+1   306	00000008  01*(0000)			 oldss	   dw	 0
+1   307					 intlvl286len	   label
+1   308	0000000A			 intstk286  ends
+1   309
+1   310					 ;
+1   311					 ; Структура стека 386 после far call
+1   312	00000000			 callstk386  struc
+1   313	00000000  01*(00000000)			 saveip	   dd	 0		 ; all interrupts frame
+1   314	00000004  01*(00000000)			 savecs	   dd	 0
+1   315					 callnolvl386len   label
+1   316					 ;--------------------------
+1   317	00000008  01*(00000000)			 savesp	   dd	 0		 ; privelege level change add frame
+1   318	0000000C  01*(00000000)			 savess	   dd	 0
+1   319					 calllvl386len	   label
+1   320	00000010			 callstk386  ends
+1   321
+1   322					 ;
+1   323					 ; Структура стека 286 после far call
+1   324	00000000			 callstk286  struc
+1   325	00000000  01*(0000)			 savip	   dw	 0		 ; all interrupts frame
+1   326	00000002  01*(0000)			 savcs	   dw	 0
+1   327					 callnolvl286len   label
+1   328					 ;--------------------------
+1   329	00000004  01*(0000)			 savsp	   dw	 0		 ; privelege level change add frame
+1   330	00000006  01*(0000)			 savss	   dw	 0
+1   331					 calllvl286len	   label
+1   332	00000008			 callstk286  ends
+1   333
+1   334					 ;
+1   335					 ; Структура дескриптора страницы в таблице страниц
+1   336		  =0001			 pg_present	 equ	 000000001h	 ; признак присутствия
+1   337		  =0002			 pg_write	 equ	 000000002h	 ; разрешена запись
+1   338		  =0004			 pg_user	 equ	 000000004h	 ; уровень пользователя
+1   339		  =0020			 pg_accessed	 equ	 000000020h	 ; был доступ к	странице
+1   340		  =0040			 pg_dirty	 equ	 000000040h	 ; была	запись в страницу
+1   341		  =FFFFF000		 pg_addrmsk	 equ	 0fffff000h	 ; маска битов адреса страницы
+1   342		  =0FFF			 pg_addrctl	 equ	 000000fffh	 ; маска битов управления
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 7
+prim1.asm
+
+
+
+1   343		  =003FF000		 pg_pgmsk	 equ	 0003ff000h	 ; маска индекса в таблице страниц
+1   344		  =FFC00000		 pg_dirmsk	 equ	 0ffc00000h	 ; маска индекса в каталоге страниц
+1   345		  =000C			 pg_pgshift	 equ	 0ch		 ; число сдвигов линейного адреса
+1   346										 ; вправо для получения	индекса	в
+1   347										 ; таблице страниц
+1   348		  =0016			 pg_dirshift	 equ	 16h		 ; число сдвигов линейного адреса
+1   349										 ; вправо для получения	индекса	в
+1   350										 ; каталоге страниц
+1   351		  =0007			 pte_mask	 equ	 00000007h	 ; User,Write,Present
+1   352		  =1000			 pdbr_offset	 equ	 1000h		 ; размер страницы 4 кб.
+1   353
+1   354					 ; Биты	в регистре CR0
+1   355		  =80000000		 pg_enable	 equ	 80000000h	 ; включение режима страниц
+1   356		  =40000000		 pg_cachedis	 equ	 40000000h	 ; запретить внутреннюю	кэш	(i486)
+1   357		  =20000000		 pg_notwrite	 equ	 20000000h	 ; Запись в кэш	запрещена	(i486)
+1   358		  =00040000		 cr0_alig	 equ	 00040000h	 ; проверка выравнивания	(i486)
+1   359		  =00010000		 pg_wrprot	 equ	 00010000h	 ; запрещена запись супервизору	(i486)
+1   360		  =0020			 cr0_numerr	 equ	 00000020h	 ; разр. прер. сопроцессора	(i486)
+1   361		  =0010			 cr0_numext	 equ	 00000010h	 ; тип процессора i80387(1)/i80287(0)
+1   362		  =0008			 cr0_tasksw	 equ	 00000008h	 ; было	переключение задач (сбр. прогр.)
+1   363		  =0004			 cr0_numemu	 equ	 00000004h	 ; любая инстр.	сопроцессора, кроме
+1   364										 ; WAIT	генерирует искл. отс. сопр.
+1   365		  =0002			 cr0_numpres	 equ	 00000002h	 ; сопроцессор есть
+1   366		  =0001			 cro_protena	 equ	 00000001h	 ; вкл.	режим защищенной моды
+1   367
+1   368					 ; Биты	в регистре CR3
+1   369		  =FFFFF000		 cr3_addrmsk	 equ	 0fffff000h	 ; маска битов адреса каталога
+1   370		  =0FFF			 cr3_addrctl	 equ	 000000fffh	 ; маска битов управления
+1   371		  =0010			 cr3_pcd	 equ	 000000010h	 ; управляет сигналом PCD (CD в	CR0)
+1   372		  =0008			 cr3_pwt	 equ	 000000008h	 ; управляет сигналом PWT (WT в	CR0)
+1   373
+1   374					 ; Биты	в регистре флагов EFLAGS
+1   375		  =00040000		 fl_ac		 equ	 00040000h	 ; проверка выравнивания разр.	(i486)
+1   376		  =00020000		 fl_vm		 equ	 00020000h	 ; установлен режим вирт. v86
+1   377		  =00010000		 fl_rf		 equ	 00010000h	 ; запрет двойного искл. по одному адресу
+1   378		  =4000			 fl_nt		 equ	 00004000h	 ; вложенный вызов по CALLF TSS
+1   379		  =0000			 fl_iopl0	 equ	 00000000h	 ; привелегия i/o = 0
+1   380		  =1000			 fl_iopl1	 equ	 00001000h	 ; привелегия i/o = 1
+1   381		  =2000			 fl_iopl2	 equ	 00002000h	 ; привелегия i/o = 2
+1   382		  =3000			 fl_iopl3	 equ	 00003000h	 ; привелегия i/o = 3
+1   383		  =3000			 fl_ioplmsk	 equ	 00003000h	 ; IOPL	bits clear
+1   384		  =0800			 fl_of		 equ	 00000800h	 ; флаг	переполнения		overflow
+1   385		  =0400			 fl_df		 equ	 00000400h	 ; флаг	направления строк	direction
+1   386		  =0200			 fl_if		 equ	 00000200h	 ; флаг	разрешения прерываний	interrupt
+1   387		  =0100			 fl_tf		 equ	 00000100h	 ; флаг	пошаговой отладки	trace
+1   388		  =0080			 fl_sf		 equ	 00000080h	 ; флаг	признака знакового бита	sign
+1   389		  =0040			 fl_zf		 equ	 00000040h	 ; флаг	признака нулевого рез.	zerro
+1   390		  =0010			 fl_af		 equ	 00000010h	 ; флаг	признака bcd переноса	auxiliary
+1   391		  =0004			 fl_pf		 equ	 00000004h	 ; флаг	признака паритета рез.	parity
+1   392		  =0002			 fl_set		 equ	 00000002h	 ; всегда 1
+1   393		  =0001			 fl_cf		 equ	 00000001h	 ; флаг	признака переноса рез.	carry
+1   394
+1   395					 ; Биты	в регистре флагов EFLAGS для режима v86
+1   396		  =00023202		 v86_flags	 equ	 fl_vm or fl_iopl3 or fl_if or fl_set
+1   397
+1   398					 ;
+1   399					 ; DR6
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 8
+prim1.asm
+
+
+
+1   400		  =0001			 drstat_B0	 equ	 0000000000000001b
+1   401		  =0002			 drstat_B1	 equ	 0000000000000010b
+1   402		  =0004			 drstat_B2	 equ	 0000000000000100b
+1   403		  =0008			 drstat_B3	 equ	 0000000000001000b
+1   404		  =2000			 drstat_EMU	 equ	 0010000000000000b
+1   405		  =4000			 drstat_TBIT	 equ	 0100000000000000b
+1   406		  =8000			 drstat_TASK	 equ	 1000000000000000b
+1   407
+1   408					 ;
+1   409					 ; DR7
+1   410		  =0001			 drctrl_lcl0	 equ	 00000000000000000000000000000001b
+1   411		  =0002			 drctrl_gbl0	 equ	 00000000000000000000000000000010b
+1   412		  =0003			 drctrl_msk0	 equ	 00000000000000000000000000000011b
+1   413		  =0004			 drctrl_lcl1	 equ	 00000000000000000000000000000100b
+1   414		  =0008			 drctrl_gbl1	 equ	 00000000000000000000000000001000b
+1   415		  =000C			 drctrl_msk1	 equ	 00000000000000000000000000001100b
+1   416		  =0010			 drctrl_lcl2	 equ	 00000000000000000000000000010000b
+1   417		  =0020			 drctrl_gbl2	 equ	 00000000000000000000000000100000b
+1   418		  =0030			 drctrl_msk2	 equ	 00000000000000000000000000110000b
+1   419		  =0040			 drctrl_lcl3	 equ	 00000000000000000000000001000000b
+1   420		  =0080			 drctrl_gbl3	 equ	 00000000000000000000000010000000b
+1   421		  =00C0			 drctrl_msk3	 equ	 00000000000000000000000011000000b
+1   422		  =0100			 drctrl_lcle	 equ	 00000000000000000000000100000000b
+1   423		  =0200			 drctrl_gble	 equ	 00000000000000000000001000000000b
+1   424		  =0300			 drctrl_mske	 equ	 00000000000000000000001100000000b
+1   425
+1   426		  =00030000		 drctrl_mskt0	 equ	 00000000000000110000000000000000b
+1   427		  =0000			 drctrl_inst0	 equ	 00000000000000000000000000000000b
+1   428		  =00010000		 drctrl_wo0	 equ	 00000000000000010000000000000000b
+1   429		  =00030000		 drctrl_rw0	 equ	 00000000000000110000000000000000b
+1   430		  =0000			 drctrl_1bl0	 equ	 00000000000000000000000000000000b
+1   431		  =00040000		 drctrl_2bl0	 equ	 00000000000001000000000000000000b
+1   432		  =000C0000		 drctrl_4bl0	 equ	 00000000000011000000000000000000b
+1   433		  =000C0000		 drctrl_mskl0	 equ	 00000000000011000000000000000000b
+1   434
+1   435		  =00300000		 drctrl_mskt1	 equ	 00000000001100000000000000000000b
+1   436		  =0000			 drctrl_inst1	 equ	 00000000000000000000000000000000b
+1   437		  =00100000		 drctrl_wo1	 equ	 00000000000100000000000000000000b
+1   438		  =00300000		 drctrl_rw1	 equ	 00000000001100000000000000000000b
+1   439		  =0000			 drctrl_1bl1	 equ	 00000000000000000000000000000000b
+1   440		  =00400000		 drctrl_2bl1	 equ	 00000000010000000000000000000000b
+1   441		  =00C00000		 drctrl_4bl1	 equ	 00000000110000000000000000000000b
+1   442		  =00C00000		 drctrl_mskl1	 equ	 00000000110000000000000000000000b
+1   443
+1   444		  =03000000		 drctrl_mskt2	 equ	 00000011000000000000000000000000b
+1   445		  =0000			 drctrl_inst2	 equ	 00000000000000000000000000000000b
+1   446		  =01000000		 drctrl_wo2	 equ	 00000001000000000000000000000000b
+1   447		  =03000000		 drctrl_rw2	 equ	 00000011000000000000000000000000b
+1   448		  =0000			 drctrl_1bl2	 equ	 00000000000000000000000000000000b
+1   449		  =04000000		 drctrl_2bl2	 equ	 00000100000000000000000000000000b
+1   450		  =0C000000		 drctrl_4bl2	 equ	 00001100000000000000000000000000b
+1   451		  =0C000000		 drctrl_mskl2	 equ	 00001100000000000000000000000000b
+1   452
+1   453		  =30000000		 drctrl_mskt3	 equ	 00110000000000000000000000000000b
+1   454		  =0000			 drctrl_inst3	 equ	 00000000000000000000000000000000b
+1   455		  =10000000		 drctrl_wo3	 equ	 00010000000000000000000000000000b
+1   456		  =30000000		 drctrl_rw3	 equ	 00110000000000000000000000000000b
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 9
+prim1.asm
+
+
+
+1   457		  =0000			 drctrl_1bl3	 equ	 00000000000000000000000000000000b
+1   458		  =40000000		 drctrl_2bl3	 equ	 01000000000000000000000000000000b
+1   459		  =C0000000		 drctrl_4bl3	 equ	 11000000000000000000000000000000b
+1   460		  =C0000000		 drctrl_mskl3	 equ	 11000000000000000000000000000000b
+1   461
+1   462					 ; Error code format (dd in stack)
+1   463		  =0001			 err_ext	 equ	 00001h
+1   464		  =0002			 err_idt	 equ	 00002h
+1   465		  =0004			 err_ldt	 equ	 00004h
+1   466		  =FFF8			 err_selec	 equ	 0fff8h
+1   467
+1   468					 ; Page	Fault Error code format	(dd in stack)
+1   469		  =0001			 pgerr_prot	 equ	 00001h		 ; =1 page protection
+1   470										 ; =0 page not present
+1   471		  =0002			 pgerr_write	 equ	 00002h		 ; =1 was writing in page
+1   472										 ; =0 was reading from page
+1   473		  =0004			 pgerr_superv	 equ	 00004h		 ; =1 processor	was in supervisor lvl
+1   474										 ; =0 processor	was in user lvl
+1   475
+1   476					 ;
+1   477					 ; interrupts with error codes in stack
+1   478		  =0000			 err_in_int0	 equ	 0		 ; NO  in Divide Error
+1   479		  =0000			 err_in_int1	 equ	 0		 ; NO  in Debug	Exeption (DR6)
+1   480		  =0000			 err_in_int2	 equ	 0		 ; NO  in NMI Interrupt
+1   481		  =0000			 err_in_int3	 equ	 0		 ; NO  in Instruction Breakpoint
+1   482		  =0000			 err_in_int4	 equ	 0		 ; NO  in INTO Overflow
+1   483		  =0000			 err_in_int5	 equ	 0		 ; NO  in BOUND	Range Exceeded
+1   484		  =0000			 err_in_int6	 equ	 0		 ; NO  in Invalid Opcode
+1   485		  =0000			 err_in_int7	 equ	 0		 ; NO  in Coprocessor Not Available
+1   486		  =0001			 err_in_int8	 equ	 1		 ; YES in Double Exeption Fault
+1   487		  =0000			 err_in_int9	 equ	 0		 ; NO  in Coprocessor Segment Overrun
+1   488		  =0001			 err_in_int10	 equ	 1		 ; YES in Invalid TSS
+1   489		  =0001			 err_in_int11	 equ	 1		 ; YES in Segment Not Present
+1   490		  =0001			 err_in_int12	 equ	 1		 ; YES in Stack	Fault
+1   491		  =0001			 err_in_int13	 equ	 1		 ; YES in General Protection
+1   492		  =0001			 err_in_int14	 equ	 1		 ; YES in Page Fault (CR2)
+1   493		  =0000			 err_in_int16	 equ	 0		 ; NO  in Coprocessor Error
+1   494		  =0000			 err_reserved	 equ	 0		 ; vector not present
+1   495
+1   496	00000000			 err_tbl	 struc
+1   497	00000000  01*(00)			 err_int0	 db	 err_in_int0
+1   498	00000001  01*(00)			 err_int1	 db	 err_in_int1
+1   499	00000002  01*(00)			 err_int2	 db	 err_in_int2
+1   500	00000003  01*(00)			 err_int3	 db	 err_in_int3
+1   501	00000004  01*(00)			 err_int4	 db	 err_in_int4
+1   502	00000005  01*(00)			 err_int5	 db	 err_in_int5
+1   503	00000006  01*(00)			 err_int6	 db	 err_in_int6
+1   504	00000007  01*(00)			 err_int7	 db	 err_in_int7
+1   505	00000008  01*(01)			 err_int8	 db	 err_in_int8
+1   506	00000009  01*(00)			 err_int9	 db	 err_in_int9
+1   507	0000000A  01*(01)			 err_int10	 db	 err_in_int10
+1   508	0000000B  01*(01)			 err_int11	 db	 err_in_int11
+1   509	0000000C  01*(01)			 err_int12	 db	 err_in_int12
+1   510	0000000D  01*(01)			 err_int13	 db	 err_in_int13
+1   511	0000000E  01*(01)			 err_int14	 db	 err_in_int14
+1   512	0000000F  01*(00)			 err_int15	 db	 err_reserved
+1   513	00000010  01*(00)			 err_int16	 db	 err_in_int16
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 10
+prim1.asm
+
+
+
+1   514	00000011			 err_tbl	 ends
+1   515
+    516					 include macros.ash
+1   517					 ;/*
+1   518					 ; Макро описания стекового фрагмента в	TSS
+1   519					 TSS_stack macro ss0,esp0,ss1,esp1,ss2,esp2
+1   520						 dd	 0h		 ; Связь назад при вызове CALL
+1   521									 ; при инициализации всегда 0
+1   522						 dd	 offset	(esp0)
+1   523						 dd	 (ss0)
+1   524						 dd	 offset	(esp1)
+1   525						 dd	 (ss1)
+1   526						 dd	 offset	(esp2)
+1   527						 dd	 (ss2)
+1   528					 endm
+1   529
+1   530					 ;
+1   531					 ; Макро описания фрагмента cr3	в TSS
+1   532					 TSS_cr3   macro tcr3
+1   533						 dd	 (tcr3)
+1   534					 endm
+1   535
+1   536					 ;
+1   537					 ; Макро описания фрагмента регистров общего назначения	в TSS
+1   538					 TSS_regs  macro teip,tflg,teax,tebx,tecx,tedx,tesi,tedi,tebp,tesp
+1   539						 dd	 offset	(teip)
+1   540						 dd	 tflg
+1   541						 dd	 teax
+1   542						 dd	 tecx
+1   543						 dd	 tedx
+1   544						 dd	 tebx
+1   545						 dd	 offset	(tesp)
+1   546						 dd	 tebp
+1   547						 dd	 tesi
+1   548						 dd	 tedi
+1   549					 endm
+1   550
+1   551					 ;
+1   552					 ; Макро описания фрагмента сегментных регистров в TSS
+1   553					 TSS_seg   macro tes,tcs,tss,tds,tfs,tgs
+1   554						 dd	 (tes)
+1   555						 dd	 (tcs)
+1   556						 dd	 (tss)
+1   557						 dd	 (tds)
+1   558						 dd	 (tfs)
+1   559						 dd	 (tgs)
+1   560					 endm
+1   561
+1   562					 ;
+1   563					 ; Макро описания вызова подпрограммы через вентиль вызова
+1   564					 ; Передача возможна только в кодовый сегмент того же уровня привелегий
+1   565					 ; или более привелегированный (простой	или согласованный)
+1   566					 callf	 macro selector
+1   567						 db	 09ah		 ; far call code
+1   568						 dw	 0h		 ; смещение всегда 0
+1   569						 dw	 (selector)	 ; селектор вентиля вызова в GDT/LDT
+1   570					 endm
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 11
+prim1.asm
+
+
+
+1   571
+1   572					 ;
+1   573					 ; Макро описания перехода на подпрограмму через вентиль вызова
+1   574					 ; Передача возможна только в кодовый сегмент того же уровня привелегий
+1   575					 ; или в согласованный сегмент
+1   576					 jmpf	macro selector
+1   577						 db	 0eah		 ; far jmp code
+1   578						 dw	 0h		 ; смещение всегда 0
+1   579						 dw	 (selector)	 ; селектор вентиля вызова в GDT/LDT
+1   580					 endm
+1   581
+1   582					 ;
+1   583					 ; Макро вычисления линейных адресов и пределов	таблицы	GDT
+1   584					 ; выполняется в реальном режиме процессора
+1   585					 ; Параметры : gdt	- сегментный адрес сегмента таблицы GDT
+1   586					 ;	       pgdt	- адрес	FWORD описателя	сегмента GDT
+1   587					 ;	       gdtlimit	- предел таблицы GDT
+1   588					 build_gdtr	 macro gdt,pgdt,gdtlimit
+1   589						 mov	 ax,(gdtlimit)		 ; предел сегмента GDT
+1   590						 mov	 word ptr [(pgdt)],ax	 ; запомнить в описателе GDT.limit
+1   591						 xor	 eax,eax
+1   592						 mov	 ax,(gdt)		 ; сегментный адрес таблицы GDT
+1   593						 shl	 eax,4			 ; получим 32-разрядный	лин. адрес
+1   594						 mov	 dword ptr [(pgdt)+2],eax; запомним в описателе	GDT.base
+1   595					 endm
+1   596					 ;
+1   597					 ; Макро вычисления линейных адресов и пределов	таблицы	IDT
+1   598					 ; выполняется в реальном режиме процессора
+1   599					 ; Параметры : idt	- сегментный адрес сегмента таблицы IDT
+1   600					 ;	       pidt	- DS:адрес FWORD описателя сегмента IDT
+1   601					 ;	       idtlimit	- предел таблицы IDT
+1   602					 build_idtr	 macro idt,pidt,idtlimit
+1   603						 mov	 ax,(idtlimit)		 ; предел сегмента IDT
+1   604						 mov	 word ptr [(pidt)],ax	 ; запомнить в описателе IDT.limit
+1   605						 xor	 eax,eax
+1   606						 mov	 ax,(idt)		 ; сегментный адрес таблицы IDT
+1   607						 shl	 eax,4			 ; получим 32-разрядный	лин. адрес
+1   608						 mov	 dword ptr [(pidt)+2],eax; запомним в описателе	IDT.base
+1   609					 endm
+1   610
+1   611					 ;
+1   612					 ; Макро инициализации базовых адресов сегментов
+1   613					 ; дескрипторов	таблицы	сегментов
+1   614					 ; Параметры : dtseg	 -  сегментный адрес сегмента таблицы дескрипторов
+1   615					 ;	       dttable	 -  DS:адрес таблицы описателей	преобразования
+1   616					 ;	       dtcount	 -  число описателей в таблице преобразований
+1   617					 build_dt	 macro dtseg,dttable,dtcount
+1   618						 local	 bdtl
+1   619						 mov	 ax,(dtseg)
+1   620						 mov	 es,ax			 ; ES	 = таблица дискрипторов
+1   621						 mov	 si,offset (dttable)	 ; DS:SI = таблица описателей преобр.
+1   622						 mov	 cx,(dtcount)		 ; CX	 = счетчик циклов
+1   623					 bdtl:
+1   624						 lodsw
+1   625						 mov	 bx,ax			 ; bx =	селектор текущего сегмента
+1   626						 and	 bx,0fff8h		 ; очистка битов TI и RPL
+1   627						 lodsw				 ; ax =	сегментный адрес тек. сегмента
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 12
+prim1.asm
+
+
+
+1   628						 mov	 dl,ah
+1   629						 shl	 ax,4			 ; low 16 бит физ. адрес сегмента
+1   630						 mov	 es:[bx+D_base1],ax
+1   631						 shr	 dl,4			 ; high	8 бит физ. адрес сегмента
+1   632						 mov	 es:[bx+D_base2],dl
+1   633						 loop	 bdtl
+1   634					 endm
+1   635
+1   636					 ;
+1   637					 ; Макро перевода процессора в защищенный режим	работы
+1   638					 goto_prot	 macro	 gdtptr,idtptr,cseg,stkseg,stkptr,dseg
+1   639						 local	 now_in_prot
+1   640
+1   641						 lgdt	 [(gdtptr)]		 ; загрузить таблицу GDT в gdtr
+1   642						 lidt	 [(idtptr)]		 ; загрузить таблицу IDT в idtr
+1   643
+1   644						 cli
+1   645
+1   646						 mov	 al,A20_PORT		 ; открыть линию A20
+1   647						 out	 STATUS_PORT,al
+1   648						 mov	 al,A20_ON
+1   649						 out	 KBD_PORT_A,al
+1   650
+1   651						 mov	 [real_es],es		 ; запомнить ES	для реального режима
+1   652						 mov	 [real_ss],ss		 ; запомнить указатель стека
+1   653						 mov	 [real_sp],sp
+1   654
+1   655						 mov	 al,8fh			 ; немаскируемые прерывания запрещаются
+1   656						 out	 CMOS_PORT,al		 ; битом 80h при доступе к CMOS
+1   657						 jmp	 $+2			 ; небольшая задержка
+1   658						 in	 al,CMOS_PORT+1
+1   659
+1   660						 in	 al,INT_MASK_PORT	 ; разрешение маскируемых прерываний
+1   661						 mov	 [int_mask],al		 ; запомним маску прерываний
+1   662						 mov	 al,0ffh		 ; запретим прерывания контроллеру
+1   663						 out	 INT_MASK_PORT,al	 ; прерываний
+1   664
+1   665						 mov	 eax,cr0
+1   666						 or	 al,prot_enable		 ; перекл. проц. в защищенный реж.
+1   667						 mov	 cr0,eax		 ; мы в	защищенном режиме
+1   668
+1   669					 ; Во входной очереди команд находятся команды,	дешифрированные
+1   670					 ; в реальном режиме процессора, их надо сбросить
+1   671						 jmp	 $+2			 ; near	jmp для	сброса очереди команд
+1   672
+1   673						 db	 0eah			 ; far jmp для загрузки	селектора
+1   674						 dw	 offset	now_in_prot	 ; и дескр. сегмента кодов защищ.
+1   675						 dw	 (cseg)			 ; режима на нулевом уровне защиты
+1   676					 now_in_prot:
+1   677
+1   678						 xor	 ax,ax
+1   679						 lldt	 ax			 ; NULL	селектор в LDT
+1   680
+1   681						 mov	 ax,(stkseg)		 ; селектор сегмента SS
+1   682						 mov	 ss,ax
+1   683						 mov	 sp,offset (stkptr)
+1   684
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 13
+prim1.asm
+
+
+
+1   685						 mov	 ax,(dseg)		 ; сегментный адрес данных prot	mode
+1   686						 mov	 ds,ax			 ; загрузка всех сегментных регистров
+1   687						 mov	 es,ax			 ; для загрузки	селекторов и
+1   688						 mov	 fs,ax			 ; дескрипторов	сегментов правильными
+1   689						 mov	 gs,ax			 ; значениями всех полей
+1   690					 endm
+1   691
+1   692					 ;
+1   693					 ; Макро перевода процессора в реальный	режим работы
+1   694					 goto_real	 macro	 dummy_sel,cseg,stkseg,stkptr,dseg
+1   695						 local	 limit_r,now_in_real
+1   696
+1   697						 cli
+1   698
+1   699						 mov	 ax,(dummy_sel)		 ; селектор данных реального режима
+1   700						 mov	 es,ax			 ; для загрузки	дескрипторов сегм.
+1   701						 mov	 ds,ax			 ; регистров правильной	для DOS
+1   702						 mov	 fs,ax			 ; границей сегментов и	атрибутами
+1   703						 mov	 gs,ax			 ; доступа
+1   704						 mov	 ss,ax
+1   705
+1   706						 db	 0eah			 ; far jmp для загрузки	дескриптора
+1   707						 dw	 OFFSET	 limit_r	 ; сегмента кодов правильной для DOS
+1   708						 dw	 rc_selec		 ; границей и атрибутами доступа
+1   709					 limit_r:
+1   710
+1   711						 mov	 eax,cr0
+1   712						 and	 eax,not prot_enable	 ; перекл. проц. в реальный режим
+1   713						 mov	 cr0,eax		 ; мы в	реальном режиме
+1   714
+1   715					 ; Во входной очереди команд находятся команды,	дешифрированные
+1   716					 ; в защищенном	режиме процессора, их надо сбросить
+1   717						 jmp	 $+2			 ; near	jmp для	сброса очереди команд
+1   718
+1   719						 db	 0eah			 ; far jmp для загрузки	селектора
+1   720						 dw	 offset	now_in_real	 ; и дескриптора кодов правильным
+1   721						 dw	 (cseg)			 ; в DOS адресом базы сегмента
+1   722					 now_in_real:
+1   723
+1   724						 assume	 ds:gdata
+1   725
+1   726						 mov	 ax,(dseg)		 ; сегментный адрес данных real	mode
+1   727						 mov	 ds,ax			 ; загрузка всех сегментных регистров
+1   728						 mov	 es,ax			 ; для загрузки	селекторов и
+1   729						 mov	 fs,ax			 ; дескрипторов	сегментов правильным
+1   730						 mov	 gs,ax			 ; в DOS адресом базы
+1   731
+1   732						 mov	 ax,(stkseg)		 ; сегментный адрес стека real mode
+1   733						 mov	 ss,ax			 ; правильный адрес сегмента
+1   734						 mov	 sp,offset (stkptr)	 ; стек	реального режима
+1   735
+1   736						 lidt	 [pold]			 ; таблица прерываний реального	режима
+1   737
+1   738						 mov	 al,A20_PORT		 ; Закрыть адресную шину A20
+1   739						 out	 STATUS_PORT,al
+1   740						 mov	 al,A20_OF
+1   741						 out	 KBD_PORT_A,al
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 14
+prim1.asm
+
+
+
+1   742
+1   743						 mov	 ax,00fh		 ; разрешение немаскируемых прерываний
+1   744						 out	 CMOS_PORT,al
+1   745						 jmp	 $+2			 ; небольшая задержка
+1   746						 in	 al,CMOS_PORT+1
+1   747
+1   748						 mov	 al,[int_mask]		 ; восстановим маску прерываний
+1   749						 out	 INT_MASK_PORT,al	 ; разрешим маскируемые	прерывания
+1   750
+1   751						 sti
+1   752					 endm
+1   753
+    754
+    755		  =0015			 INTNO		 equ	 21	 ; число векторов в таблице IDT
+    756		  =0008			 DSCPSIZE	 equ	 8	 ; размер дескриптора
+    757		  =0004			 INTSIZE	 equ	 4	 ; размер задачи монитора прерываний
+    758
+    759		  =0002			 TWO		 equ	 2
+    760		  =0004			 WORDLEN	 equ	 4	 ; число символов в строке чисел WORD
+    761		  =0008			 DOUBLELEN	 equ	 8	 ; число символов в строке чисел DWORD
+    762		  =0001			 prot_enable	 equ	 01h	 ; бит включения защищенного режима
+    763		  =0007			 attribute	 equ	 07h	 ; атрибут символов на экране
+    764		  =0020			 space		 equ	 20h	 ; код символа пробела
+    765
+    766					 ;
+    767					 ; Шаг 1: глобальная таблица дескрипторов сегментов системы
+    768					 ;
+    769	    0000			 GDT		 segment para	 public	 use16	 'GDT'
+    770
+    771	    0000			 gdt_tab label	 qword	 ; дескриптора *!! требуют инициализации адреса
+    772
+    773					 ; NULL	селектор GDT, должен быть всегда и первым в таблице
+    774		  =0000			 null_selec	 equ	 0
+    775	    0000  0000 0000 00 00 00  +	    dscp	 <0,0,0,0,0,0>
+    776		  00
+    777
+    778					 ; селектор к сегменту GDT как к сегменту данных
+    779		  =0008			 gdt_selec	equ	$-gdt_tab or TBL_GDT or	RPL_0		 ;*!!
+    780					    d_data	 <gdt_limit>,0,<DATA_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   781	    0008  006F				 dw    (offset (gdt_limit)) and	00000ffffh
+1   782	    000A  0000				 dw    (0) and 00000ffffh
+1   783	    000C  00				 db    ((0) and	000ff0000h) shr	10h
+1   784	    000D  92				 db    (DATA_ACC or DPL_0)
+1   785	    000E  00				 db    (((offset (gdt_limit)) and 0000f0000h) shr 10h) or (ACC2_B_SMALL	or	    +
+    786					 ACC2_G_BYTE)
+1   787	    000F  00				 db    ((0) and	0ff000000h) shr	18h
+    788
+    789					 ; сегмент системных кодов загрузки программы, всегда RPL=DPL=0
+    790		  =0010			 code_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    791					    d_code	 <code_limit>,0,<CODE_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   792	    0010  023C				 dw    (offset (code_limit)) and 00000ffffh
+1   793	    0012  0000				 dw    (0) and 00000ffffh
+1   794	    0014  00				 db    ((0) and	000ff0000h) shr	10h
+1   795	    0015  9A				 db    (CODE_ACC or DPL_0)
+1   796	    0016  00				 db    (((offset (code_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    797					 ACC2_G_BYTE)
+1   798	    0017  00				 db    ((0) and	0ff000000h) shr	18h
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 15
+prim1.asm
+
+
+
+    799
+    800					 ; сегмент TSS задачи загрузки,	RPL,DPL	с которого можно запросить
+    801		  =0018			 task0_TSS_selec equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    802					    d_tss	 <task0_TSS_limit>,0,<TSS_ACC or DPL_0>,<ACC2_G_BYTE>
+1   803	    0018  0067				 dw    (offset (task0_TSS_limit)) and 00000ffffh
+1   804	    001A  0000				 dw    (0) and 00000ffffh
+1   805	    001C  00				 db    ((0) and	000ff0000h) shr	10h
+1   806	    001D  89				 db    (TSS_ACC	or DPL_0)
+1   807	    001E  00				 db    (((offset (task0_TSS_limit)) and	0000f0000h) shr	10h) or	(ACC2_G_BYTE)
+1   808	    001F  00				 db    ((0) and	0ff000000h) shr	18h
+    809
+    810					 ; сегмент стека задачи	уровня 0, RPL=DPL=0 всегда
+    811		  =0020			 stk0_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    812					    d_data	 <stk0_limit>,0,<DATA_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   813	    0020  00FF				 dw    (offset (stk0_limit)) and 00000ffffh
+1   814	    0022  0000				 dw    (0) and 00000ffffh
+1   815	    0024  00				 db    ((0) and	000ff0000h) shr	10h
+1   816	    0025  92				 db    (DATA_ACC or DPL_0)
+1   817	    0026  00				 db    (((offset (stk0_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    818					 ACC2_G_BYTE)
+1   819	    0027  00				 db    ((0) and	0ff000000h) shr	18h
+    820
+    821					 ; сегмент стека задачи	уровня 1, RPL=DPL=1 всегда
+    822		  =0029			 stk1_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_1		 ;*!!
+    823					    d_data	 <stk1_limit>,0,<DATA_ACC or DPL_1>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   824	    0028  00FF				 dw    (offset (stk1_limit)) and 00000ffffh
+1   825	    002A  0000				 dw    (0) and 00000ffffh
+1   826	    002C  00				 db    ((0) and	000ff0000h) shr	10h
+1   827	    002D  B2				 db    (DATA_ACC or DPL_1)
+1   828	    002E  00				 db    (((offset (stk1_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    829					 ACC2_G_BYTE)
+1   830	    002F  00				 db    ((0) and	0ff000000h) shr	18h
+    831
+    832					 ; сегмент стека задачи	уровня 2, RPL=DPL=2 всегда
+    833		  =0032			 stk2_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_2		 ;*!!
+    834					    d_data	 <stk2_limit>,0,<DATA_ACC or DPL_2>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   835	    0030  00FF				 dw    (offset (stk2_limit)) and 00000ffffh
+1   836	    0032  0000				 dw    (0) and 00000ffffh
+1   837	    0034  00				 db    ((0) and	000ff0000h) shr	10h
+1   838	    0035  D2				 db    (DATA_ACC or DPL_2)
+1   839	    0036  00				 db    (((offset (stk2_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    840					 ACC2_G_BYTE)
+1   841	    0037  00				 db    ((0) and	0ff000000h) shr	18h
+    842
+    843					 ; сегмент стека задачи	уровня 3, RPL=DPL=3 всегда
+    844		  =003B			 stk3_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_3		 ;*!!
+    845					    d_data	 <stk3_limit>,0,<DATA_ACC or DPL_3>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   846	    0038  00FF				 dw    (offset (stk3_limit)) and 00000ffffh
+1   847	    003A  0000				 dw    (0) and 00000ffffh
+1   848	    003C  00				 db    ((0) and	000ff0000h) shr	10h
+1   849	    003D  F2				 db    (DATA_ACC or DPL_3)
+1   850	    003E  00				 db    (((offset (stk3_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    851					 ACC2_G_BYTE)
+1   852	    003F  00				 db    ((0) and	0ff000000h) shr	18h
+    853
+    854					 ; сегмент видеопамяти цветного	режима,	RPL=0, DPL=3
+    855		  =0040			 video_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 16
+prim1.asm
+
+
+
+    856					    d_data	 <CRT_SIZE-1>,<CRT_ADDR>,<DATA_ACC or DPL_3>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   857	    0040  7FFF				 dw    (offset (CRT_SIZE-1)) and 00000ffffh
+1   858	    0042  8000				 dw    (CRT_ADDR) and 00000ffffh
+1   859	    0044  0B				 db    ((CRT_ADDR) and 000ff0000h) shr 10h
+1   860	    0045  F2				 db    (DATA_ACC or DPL_3)
+1   861	    0046  00				 db    (((offset (CRT_SIZE-1)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    862					 ACC2_G_BYTE)
+1   863	    0047  00				 db    ((CRT_ADDR) and 0ff000000h) shr 18h
+    864
+    865					 ; сегмент данных задачи загрузки, RPL,DPL разрешенного	доступа
+    866		  =0048			 gdata_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    867					    d_data	 <gdata_limit>,0,<DATA_ACC or DPL_3>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   868	    0048  0068				 dw    (offset (gdata_limit)) and 00000ffffh
+1   869	    004A  0000				 dw    (0) and 00000ffffh
+1   870	    004C  00				 db    ((0) and	000ff0000h) shr	10h
+1   871	    004D  F2				 db    (DATA_ACC or DPL_3)
+1   872	    004E  00				 db    (((offset (gdata_limit))	and 0000f0000h)	shr 10h) or (ACC2_B_SMALL or	    +
+    873					 ACC2_G_BYTE)
+1   874	    004F  00				 db    ((0) and	0ff000000h) shr	18h
+    875
+    876					 ; сегмент кодов программ обработки прерываний,	RPL,DPL	времени	выполнения
+    877		  =0050			 int_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    878					    d_code	 <code_limit>,0,<CODE_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   879	    0050  023C				 dw    (offset (code_limit)) and 00000ffffh
+1   880	    0052  0000				 dw    (0) and 00000ffffh
+1   881	    0054  00				 db    ((0) and	000ff0000h) shr	10h
+1   882	    0055  9A				 db    (CODE_ACC or DPL_0)
+1   883	    0056  00				 db    (((offset (code_limit)) and 0000f0000h) shr 10h)	or (ACC2_B_SMALL or	    +
+    884					 ACC2_G_BYTE)
+1   885	    0057  00				 db    ((0) and	0ff000000h) shr	18h
+    886
+    887					 ; селектор и дескриптор данных	в формате реальной моды	процессора
+    888		  =0058			 dmy_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    889					    d_data	 <0ffffh>,0,<DATA_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   890	    0058  FFFF				 dw    (offset (0ffffh)) and 00000ffffh
+1   891	    005A  0000				 dw    (0) and 00000ffffh
+1   892	    005C  00				 db    ((0) and	000ff0000h) shr	10h
+1   893	    005D  92				 db    (DATA_ACC or DPL_0)
+1   894	    005E  00				 db    (((offset (0ffffh)) and 0000f0000h) shr 10h) or (ACC2_B_SMALL or	ACC2_G_BYTE)
+1   895	    005F  00				 db    ((0) and	0ff000000h) shr	18h
+    896
+    897					 ; селектор и дескриптор кодов в формате реальной моды процессора
+    898		  =0060			 rc_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0		 ;*!!
+    899					    d_code	 <0ffffh>,0,<CODE_ACC or DPL_0>,<ACC2_B_SMALL or ACC2_G_BYTE>
+1   900	    0060  FFFF				 dw    (offset (0ffffh)) and 00000ffffh
+1   901	    0062  0000				 dw    (0) and 00000ffffh
+1   902	    0064  00				 db    ((0) and	000ff0000h) shr	10h
+1   903	    0065  9A				 db    (CODE_ACC or DPL_0)
+1   904	    0066  00				 db    (((offset (0ffffh)) and 0000f0000h) shr 10h) or (ACC2_B_SMALL or	ACC2_G_BYTE)
+1   905	    0067  00				 db    ((0) and	0ff000000h) shr	18h
+    906
+    907					 ; сегмент области коммуникации	BIOS, RPL,DPL по усмотрению автора
+    908		  =0068			 bios_selec	 equ	 $-gdt_tab or TBL_GDT or RPL_0
+    909					    d_data	 <B_DATA_SIZE-1>,<B_DATA_ADDR>,<DATA_ACC or DPL_0>,<ACC2_B_SMALL or	    +
+    910					 ACC2_G_BYTE>
+1   911	    0068  02FF				 dw    (offset (B_DATA_SIZE-1))	and 00000ffffh
+1   912	    006A  0400				 dw    (B_DATA_ADDR) and 00000ffffh
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 17
+prim1.asm
+
+
+
+1   913	    006C  00				 db    ((B_DATA_ADDR) and 000ff0000h) shr 10h
+1   914	    006D  92				 db    (DATA_ACC or DPL_0)
+1   915	    006E  00				 db    (((offset (B_DATA_SIZE-1)) and 0000f0000h) shr 10h) or (ACC2_B_SMALL or	    +
+    916					 ACC2_G_BYTE)
+1   917	    006F  00				 db    ((B_DATA_ADDR) and 0ff000000h) shr 18h
+    918
+    919		  =0070			 GDT_size	 equ	 $-gdt_tab	 ; длина таблицы
+    920		  =006F			 GDT_limit	 equ	 GDT_size-1
+    921	    0070			 GDT		 ends
+    922
+    923					 ;
+    924					 ; Шаг 2: таблица дескрипторов прерываний системы
+    925					 ;
+    926	    0000			 IDT		 segment para	 public	 use16	 'IDT'
+    927
+    928		  =IDT:0000		 idt_tab	 equ	 $
+    929						 REPT	 INTNO
+    930					 ; дескр. вентиля прерывания, DPL определяет привелегии	доступа	к вектору,
+    931					 ; привелегии обработки	прерывания заданы как DPL в дескрипторе	кодов
+    932						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+    933						 ENDM
+1   934						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   935	    0000  0000				 dw    (offset (0)) and	00000ffffh
+2   936	    0002  0050				 dw    (int_selec)
+2   937	    0004  00				 db    0h
+2   938	    0005  EE				 db    (INT_ACC	or DPL_3)
+2   939	    0006  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   940						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   941	    0008  0000				 dw    (offset (0)) and	00000ffffh
+2   942	    000A  0050				 dw    (int_selec)
+2   943	    000C  00				 db    0h
+2   944	    000D  EE				 db    (INT_ACC	or DPL_3)
+2   945	    000E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   946						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   947	    0010  0000				 dw    (offset (0)) and	00000ffffh
+2   948	    0012  0050				 dw    (int_selec)
+2   949	    0014  00				 db    0h
+2   950	    0015  EE				 db    (INT_ACC	or DPL_3)
+2   951	    0016  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   952						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   953	    0018  0000				 dw    (offset (0)) and	00000ffffh
+2   954	    001A  0050				 dw    (int_selec)
+2   955	    001C  00				 db    0h
+2   956	    001D  EE				 db    (INT_ACC	or DPL_3)
+2   957	    001E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   958						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   959	    0020  0000				 dw    (offset (0)) and	00000ffffh
+2   960	    0022  0050				 dw    (int_selec)
+2   961	    0024  00				 db    0h
+2   962	    0025  EE				 db    (INT_ACC	or DPL_3)
+2   963	    0026  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   964						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   965	    0028  0000				 dw    (offset (0)) and	00000ffffh
+2   966	    002A  0050				 dw    (int_selec)
+2   967	    002C  00				 db    0h
+2   968	    002D  EE				 db    (INT_ACC	or DPL_3)
+2   969	    002E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 18
+prim1.asm
+
+
+
+1   970						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   971	    0030  0000				 dw    (offset (0)) and	00000ffffh
+2   972	    0032  0050				 dw    (int_selec)
+2   973	    0034  00				 db    0h
+2   974	    0035  EE				 db    (INT_ACC	or DPL_3)
+2   975	    0036  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   976						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   977	    0038  0000				 dw    (offset (0)) and	00000ffffh
+2   978	    003A  0050				 dw    (int_selec)
+2   979	    003C  00				 db    0h
+2   980	    003D  EE				 db    (INT_ACC	or DPL_3)
+2   981	    003E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   982						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   983	    0040  0000				 dw    (offset (0)) and	00000ffffh
+2   984	    0042  0050				 dw    (int_selec)
+2   985	    0044  00				 db    0h
+2   986	    0045  EE				 db    (INT_ACC	or DPL_3)
+2   987	    0046  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   988						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   989	    0048  0000				 dw    (offset (0)) and	00000ffffh
+2   990	    004A  0050				 dw    (int_selec)
+2   991	    004C  00				 db    0h
+2   992	    004D  EE				 db    (INT_ACC	or DPL_3)
+2   993	    004E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1   994						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2   995	    0050  0000				 dw    (offset (0)) and	00000ffffh
+2   996	    0052  0050				 dw    (int_selec)
+2   997	    0054  00				 db    0h
+2   998	    0055  EE				 db    (INT_ACC	or DPL_3)
+2   999	    0056  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1000						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1001	    0058  0000				 dw    (offset (0)) and	00000ffffh
+2  1002	    005A  0050				 dw    (int_selec)
+2  1003	    005C  00				 db    0h
+2  1004	    005D  EE				 db    (INT_ACC	or DPL_3)
+2  1005	    005E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1006						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1007	    0060  0000				 dw    (offset (0)) and	00000ffffh
+2  1008	    0062  0050				 dw    (int_selec)
+2  1009	    0064  00				 db    0h
+2  1010	    0065  EE				 db    (INT_ACC	or DPL_3)
+2  1011	    0066  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1012						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1013	    0068  0000				 dw    (offset (0)) and	00000ffffh
+2  1014	    006A  0050				 dw    (int_selec)
+2  1015	    006C  00				 db    0h
+2  1016	    006D  EE				 db    (INT_ACC	or DPL_3)
+2  1017	    006E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1018						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1019	    0070  0000				 dw    (offset (0)) and	00000ffffh
+2  1020	    0072  0050				 dw    (int_selec)
+2  1021	    0074  00				 db    0h
+2  1022	    0075  EE				 db    (INT_ACC	or DPL_3)
+2  1023	    0076  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1024						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1025	    0078  0000				 dw    (offset (0)) and	00000ffffh
+2  1026	    007A  0050				 dw    (int_selec)
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 19
+prim1.asm
+
+
+
+2  1027	    007C  00				 db    0h
+2  1028	    007D  EE				 db    (INT_ACC	or DPL_3)
+2  1029	    007E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1030						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1031	    0080  0000				 dw    (offset (0)) and	00000ffffh
+2  1032	    0082  0050				 dw    (int_selec)
+2  1033	    0084  00				 db    0h
+2  1034	    0085  EE				 db    (INT_ACC	or DPL_3)
+2  1035	    0086  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1036						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1037	    0088  0000				 dw    (offset (0)) and	00000ffffh
+2  1038	    008A  0050				 dw    (int_selec)
+2  1039	    008C  00				 db    0h
+2  1040	    008D  EE				 db    (INT_ACC	or DPL_3)
+2  1041	    008E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1042						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1043	    0090  0000				 dw    (offset (0)) and	00000ffffh
+2  1044	    0092  0050				 dw    (int_selec)
+2  1045	    0094  00				 db    0h
+2  1046	    0095  EE				 db    (INT_ACC	or DPL_3)
+2  1047	    0096  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1048						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1049	    0098  0000				 dw    (offset (0)) and	00000ffffh
+2  1050	    009A  0050				 dw    (int_selec)
+2  1051	    009C  00				 db    0h
+2  1052	    009D  EE				 db    (INT_ACC	or DPL_3)
+2  1053	    009E  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+1  1054						   d_int	0,<int_selec>,<INT_ACC or DPL_3>
+2  1055	    00A0  0000				 dw    (offset (0)) and	00000ffffh
+2  1056	    00A2  0050				 dw    (int_selec)
+2  1057	    00A4  00				 db    0h
+2  1058	    00A5  EE				 db    (INT_ACC	or DPL_3)
+2  1059	    00A6  0000				 dw    ((offset	(0)) and 0ffff0000h) shr 10h
+   1060		  =00A8			 IDT_size	 equ	 $-idt_tab
+   1061		  =00A7			 IDT_limit	 equ	 IDT_size-1
+   1062	    00A8			 IDT		 ends
+   1063
+   1064					 ;
+   1065					 ; Сегмент данных системы
+   1066					 ;
+   1067	    0000			 Gdata		 segment para	 public	 use16	 'Gdata'
+   1068		  =GDATA:0000		 Gdata_beg	 equ	 $
+   1069
+   1070					 ;
+   1071					 ; Шаг 3: описатели дескрипторных таблиц для загрузки регистров
+   1072					 ;
+   1073	    0000			 pGDT	 label	 fword
+   1074	    0000  006F				 dw	 GDT_limit		 ; размер GDT
+   1075	    0002  00000000			 dd	 0			 ; физ.	базовый	адрес GDT
+   1076	    0006			 pIDT	 label	 fword
+   1077	    0006  00A7				 dw	 IDT_limit		 ; размер IDT защищ. режима
+   1078	    0008  00000000			 dd	 0			 ; физ.	базовый	адрес IDT
+   1079	    000C			 pold	 label	 fword
+   1080	    000C  03FF				 dw	 03ffh			 ; размер IDT реальной моды
+   1081	    000E  00000000			 dd	 0			 ; физ.	базовый	адрес IDT
+   1082
+   1083					 ;
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 20
+prim1.asm
+
+
+
+   1084					 ; Шаг 4: таблица преобразователей дескрипторов	сегментов GDT
+   1085					 ;
+   1086	    0012			 gdt_phys_tab	 label	 word
+   1087	    0012  0018 0000s			 dw	 task0_TSS_selec,task0_TSS	 ; селектор,сегментный адрес
+   1088	    0016  0020 0000s			 dw	 stk0_selec,stk0
+   1089	    001A  0029 0000s			 dw	 stk1_selec,stk1
+   1090	    001E  0032 0000s			 dw	 stk2_selec,stk2
+   1091	    0022  003B 0000s			 dw	 stk3_selec,stk3
+   1092	    0026  0010 0000s			 dw	 code_selec,code
+   1093	    002A  0048 0000s			 dw	 gdata_selec,Gdata
+   1094	    002E  0050 0000s			 dw	 int_selec,code
+   1095	    0032  0058 0000s			 dw	 dmy_selec,dmy
+   1096	    0036  0060 0000s			 dw	 rc_selec,code
+   1097	    003A  0008 0000s			 dw	 gdt_selec,gdt
+   1098		  =000B			 gdt_tab_count	 equ	 ($-gdt_phys_tab)/4
+   1099
+   1100					 ;
+   1101					 ; Шаг 5: системные сообщения
+   1102					 ;
+   1103	    003E  000A			 msg_addr	 dw	 10		  ; строка начала вывода на экран
+   1104	    0040  69 6E	20 70 72 6F 74+	 in_protected	 db	 'in protected mode',0
+   1105		  65 63	74 65 64 20 6D+
+   1106		  6F 64	65 00
+   1107	    0052  69 6E	74 65 72 72 75+	 int_msg	 db	 'interrupt '
+   1108		  70 74	20
+   1109	    005C  3F 3F	3F 3F 48 00	 int_num	 db	 '????','H',0
+   1110					 ;
+   1111					 ; Память для хранения регистров SS,SP,ES.
+   1112					 ; Они сохраняются здесь перед входом в	защищенный режим.
+   1113	    0062  ????			 real_ss	 dw	 ?
+   1114	    0064  ????			 real_sp	 dw	 ?
+   1115	    0066  ????			 real_es	 dw	 ?
+   1116	    0068  ??			 int_mask	 db	 ?	 ; для спасения	маски прерываний
+   1117
+   1118		  =0069			 Gdata_size	 equ	 $-Gdata_beg
+   1119		  =0068			 Gdata_limit	 equ	 Gdata_size-1
+   1120	    0069			 Gdata		 ends
+   1121
+   1122					 ;
+   1123					 ; Шаг 6: стековые сегменты для	всех уровней привелегий
+   1124					 ;
+   1125	    0000			 stk0		 segment para	 public	 use16	 'stk0'
+   1126		  =STK0:0000		 stk0_beg	 equ	 $
+   1127	    0000  0100*(00)			 db	 100h	 dup(0)
+   1128		  =0100			 stk0_size	 equ	 $-stk0_beg
+   1129		  =00FF			 stk0_limit	 equ	 stk0_size-1
+   1130	    0100			 stk0		 ends
+   1131
+   1132	    0000			 stk1		 segment para	 public	 use16	 'stk1'
+   1133		  =STK1:0000		 stk1_beg	 equ	 $
+   1134	    0000  0100*(00)			 db	 100h	 dup(0)
+   1135		  =0100			 stk1_size	 equ	 $-stk1_beg
+   1136		  =00FF			 stk1_limit	 equ	 stk1_size-1
+   1137	    0100			 stk1		 ends
+   1138
+   1139	    0000			 stk2		 segment para	 public	 use16	 'stk2'
+   1140		  =STK2:0000		 stk2_beg	 equ	 $
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 21
+prim1.asm
+
+
+
+   1141	    0000  0100*(00)			 db	 100h	 dup(0)
+   1142		  =0100			 stk2_size	 equ	 $-stk2_beg
+   1143		  =00FF			 stk2_limit	 equ	 stk2_size-1
+   1144	    0100			 stk2		 ends
+   1145
+   1146	    0000			 stk3		 segment para	 public	 use16	 'stk3'
+   1147		  =STK3:0000		 stk3_beg	 equ	 $
+   1148	    0000  0100*(00)			 db	 100h	 dup(0)
+   1149		  =0100			 stk3_size	 equ	 $-stk3_beg
+   1150		  =00FF			 stk3_limit	 equ	 stk3_size-1
+   1151	    0100			 stk3		 ends
+   1152
+   1153	00000000			 DOS_stack	 segment para	 stack	 'stack'
+   1154		  =DOS_STACK:0000	 DOS_stack_beg	 equ	 $
+   1155	00000000  0100*(??)			 db	 100h	 dup(?)
+   1156		  =0100			 stk_DOS_size	 equ	 $-DOS_stack_beg
+   1157		  =00FF			 stk_DOS_limit	 equ	 stk_DOS_size-1
+   1158	00000100			 DOS_stack	 ends
+   1159
+   1160					 ;
+   1161					 ; Шаг 7: сегмент состояния задачи TSS
+   1162					 ;
+   1163	    0000			 task0_TSS	 segment para	 public	 use16	 'task0'
+   1164		  =TASK0_TSS:0000	 task0_TSS_beg	 equ	 $
+   1165					 TSS_stack	 stk0_selec,stk0_size,stk1_selec,stk1_size,stk2_selec,stk2_size
+1  1166	    0000  00000000			 dd	 0h		 ; Связь назад при вызове CALL
+1  1167	    0004  00000100			 dd	 offset	(stk0_size)
+1  1168	    0008  00000020			 dd	 (stk0_selec)
+1  1169	    000C  00000100			 dd	 offset	(stk1_size)
+1  1170	    0010  00000029			 dd	 (stk1_selec)
+1  1171	    0014  00000100			 dd	 offset	(stk2_size)
+1  1172	    0018  00000032			 dd	 (stk2_selec)
+   1173					 TSS_cr3	 0
+1  1174	    001C  00000000			 dd	 (0)
+   1175					 TSS_regs	 0,0,0,0,0,0,0,0,0,stk0_size
+1  1176	    0020  00000000			 dd	 offset	(0)
+1  1177	    0024  00000000			 dd	 0
+1  1178	    0028  00000000			 dd	 0
+1  1179	    002C  00000000			 dd	 0
+1  1180	    0030  00000000			 dd	 0
+1  1181	    0034  00000000			 dd	 0
+1  1182	    0038  00000100			 dd	 offset	(stk0_size)
+1  1183	    003C  00000000			 dd	 0
+1  1184	    0040  00000000			 dd	 0
+1  1185	    0044  00000000			 dd	 0
+   1186					 TSS_seg	 gdata_selec,code_selec,stk0_selec,gdata_selec,gdata_selec,gdata_selec
+1  1187	    0048  00000048			 dd	 (gdata_selec)
+1  1188	    004C  00000010			 dd	 (code_selec)
+1  1189	    0050  00000020			 dd	 (stk0_selec)
+1  1190	    0054  00000048			 dd	 (gdata_selec)
+1  1191	    0058  00000048			 dd	 (gdata_selec)
+1  1192	    005C  00000048			 dd	 (gdata_selec)
+   1193	    0060  00000000				 dd	 0	 ; LDT
+   1194	    0064  0000					 dw	 0	 ; T бит TSS всегда 0 при инициализации
+   1195	    0066  0068					 dw	 068h	 ; I/O table start
+   1196		  =0068			 task0_TSS_size	 equ	 $-task0_TSS_beg
+   1197		  =0067			 task0_TSS_limit equ	 task0_TSS_size-1
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 22
+prim1.asm
+
+
+
+   1198	    0068			 task0_TSS	 ends
+   1199
+   1200					 ;
+   1201					 ; Шаг 8: сегмент данных в формате реальной моды для возврата в	DOS
+   1202					 ;
+   1203	    0000			 dmy		 segment para	 public	 use16	 'dmy'
+   1204		  =DMY:0000		 dmy_beg	 equ	 $
+   1205	    0000  80*(00)			 db	 128	 dup(0)
+   1206		  =0080			 dmy_size	 equ	 $-dmy_beg
+   1207		  =FFFF			 dmy_limit	 equ	 0ffffh
+   1208	    0080			 dmy		 ends
+   1209
+   1210					 ;
+   1211					 ; Сегмент кодов системы
+   1212					 ;
+   1213	    0000			 code		 segment para	 public	 use16	 'code'
+   1214		  =CODE:0000		 code_beg	 equ	 $
+   1215
+   1216						 assume	 cs:code, ds:gdata
+   1217
+   1218	    0000			 main	 proc	 far
+   1219	    0000  FA				 cli
+   1220	    0001  B8 0000s			 mov	 ax,gdata
+   1221	    0004  8E D8				 mov	 ds,ax
+   1222
+   1223	    0006  B8 0000s			 mov	 ax,stk0
+   1224	    0009  8E D0				 mov	 ss,ax
+   1225	    000B  BC 0100			 mov	 sp,offset stk0_size
+   1226	    000E  FB				 sti
+   1227
+   1228					 ;
+   1229					 ; Шаг 9: инициализация	IDT
+   1230					 ;
+   1231	    000F  B8 0000s			 mov	 ax,IDT
+   1232	    0012  8E C0				 mov	 es,ax
+   1233	    0014  BF 0000r			 mov	 di,offset idt_tab	 ; DI=таблица прерываний IDT
+   1234	    0017  B8 00EAr			 mov	 ax,offset int_entry	 ; AX=адрес прогр. обраб. прерываний
+   1235										 ; как смещение	от int_selec
+   1236	    001A  B9 0015			 mov	 cx,INTNO
+   1237	    001D			 fillidt:
+   1238	    001D  26: 89 05			 mov	 es:[di],ax		 ; точку входа в дескриптор вызова
+   1239	    0020  83 C7	08			 add	 di,DSCPSIZE		 ; след. дескриптор в IDT
+   1240	    0023  05 0004			 add	 ax,INTSIZE		 ; точка входа для след. прерывания
+   1241	    0026  E2 F5				 loop	 fillidt		 ; для всех прерываний в IDT
+   1242
+   1243					 ;
+   1244					 ; Шаг 10: строим описатель GDT
+   1245					 ;
+   1246						 build_gdtr	 gdt,pgdt,gdt_limit
+1  1247	    0028  B8 006F			 mov	 ax,(gdt_limit)		  ; предел сегмента gdt
+1  1248	    002B  A3 0000r			 mov	 word ptr [(pgdt)],ax	 ; запомнить в описателе gdt.limit
+1  1249	    002E  66| 33 C0			 xor	 eax,eax
+1  1250	    0031  B8 0000s			 mov	 ax,(gdt)		 ; сегментный адрес таблицы gdt
+1  1251	    0034  66| C1 E0 04			 shl	 eax,4			 ; получим 32-разрядный	лин. адрес
+1  1252	    0038  66| A3 0002r			 mov	 dword ptr [(pgdt)+2],eax; запомним в описателе	gdt.base
+   1253
+   1254					 ;
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 23
+prim1.asm
+
+
+
+   1255					 ; Шаг 11: строим описатель IDT
+   1256					 ;
+   1257						 build_idtr	 idt,pidt,idt_limit
+1  1258	    003C  B8 00A7			 mov	 ax,(idt_limit)		  ; предел сегмента idt
+1  1259	    003F  A3 0006r			 mov	 word ptr [(pidt)],ax	 ; запомнить в описателе idt.limit
+1  1260	    0042  66| 33 C0			 xor	 eax,eax
+1  1261	    0045  B8 0000s			 mov	 ax,(idt)		 ; сегментный адрес таблицы idt
+1  1262	    0048  66| C1 E0 04			 shl	 eax,4			 ; получим 32-разрядный	лин. адрес
+1  1263	    004C  66| A3 0008r			 mov	 dword ptr [(pidt)+2],eax; запомним в описателе	idt.base
+   1264
+   1265					 ;
+   1266					 ; Шаг 12: строим глобальную таблицу дескрипторов системы GDT
+   1267					 ;
+   1268						 build_dt	 gdt,gdt_phys_tab,gdt_tab_count
+1  1269	    0050  B8 0000s			 mov	 ax,(gdt)
+1  1270	    0053  8E C0				 mov	 es,ax			 ; ES	 = таблица дискрипторов
+1  1271	    0055  BE 0012r			 mov	 si,offset (gdt_phys_tab)     ;	DS:SI =	таблица	описателей преобр.
+1  1272	    0058  B9 000B			 mov	 cx,(gdt_tab_count)	       ; CX    = счетчик циклов
+1  1273	    005B			 ??0000:
+1  1274	    005B  AD				 lodsw
+1  1275	    005C  8B D8				 mov	 bx,ax			 ; bx =	селектор текущего сегмента
+1  1276	    005E  81 E3	FFF8			 and	 bx,0fff8h		 ; очистка битов TI и RPL
+1  1277	    0062  AD				 lodsw				 ; ax =	сегментный адрес тек. сегмента
+1  1278	    0063  8A D4				 mov	 dl,ah
+1  1279	    0065  C1 E0	04			 shl	 ax,4			 ; low 16 бит физ. адрес сегмента
+1  1280	    0068  26: 89 47 02			 mov	 es:[bx+D_base1],ax
+1  1281	    006C  C0 EA	04			 shr	 dl,4			 ; high	8 бит физ. адрес сегмента
+1  1282	    006F  26: 88 57 04			 mov	 es:[bx+D_base2],dl
+1  1283	    0073  E2 E6				 loop	 ??0000
+   1284
+   1285					 ;
+   1286					 ; Шаг 13: переходим в защищенный режим	на 0 уровне привелегий
+   1287					 ;
+   1288						 goto_prot	 pgdt,pidt,code_selec,stk0_selec,stk0_size,Gdata_selec
+1  1289	    0075  0F 01	16 0000r		 lgdt	 [(pgdt)]	       ; загрузить таблицу GDT в gdtr
+1  1290	    007A  0F 01	1E 0006r		 lidt	 [(pidt)]	       ; загрузить таблицу IDT в idtr
+1  1291	    007F  FA				 cli
+1  1292	    0080  B0 D1				 mov	 al,A20_PORT		 ; открыть линию A20
+1  1293	    0082  E6 64				 out	 STATUS_PORT,al
+1  1294	    0084  B0 DF				 mov	 al,A20_ON
+1  1295	    0086  E6 60				 out	 KBD_PORT_A,al
+1  1296	    0088  8C 06	0066r			 mov	 [real_es],es		 ; запомнить ES	для реального режима
+1  1297	    008C  8C 16	0062r			 mov	 [real_ss],ss		 ; запомнить указатель стека
+1  1298	    0090  89 26	0064r			 mov	 [real_sp],sp
+1  1299	    0094  B0 8F				 mov	 al,8fh			 ; немаскируемые прерывания запрещаются
+1  1300	    0096  E6 70				 out	 CMOS_PORT,al		 ; битом 80h при доступе к CMOS
+1  1301	    0098  EB 00				 jmp	 $+2			 ; небольшая задержка
+1  1302	    009A  E4 71				 in	 al,CMOS_PORT+1
+1  1303	    009C  E4 21				 in	 al,INT_MASK_PORT	 ; разрешение маскируемых прерываний
+1  1304	    009E  A2 0068r			 mov	 [int_mask],al		 ; запомним маску прерываний
+1  1305	    00A1  B0 FF				 mov	 al,0ffh		 ; запретим прерывания контроллеру
+1  1306	    00A3  E6 21				 out	 INT_MASK_PORT,al	 ; прерываний
+1  1307	    00A5  0F 20	C0			 mov	 eax,cr0
+1  1308	    00A8  0C 01				 or	 al,prot_enable		 ; перекл. проц. в защищенный реж.
+1  1309	    00AA  0F 22	C0			 mov	 cr0,eax		 ; мы в	защищенном режиме
+1  1310	    00AD  EB 00				 jmp	 $+2			 ; near	jmp для	сброса очереди команд
+1  1311	    00AF  EA				 db	 0eah			 ; far jmp для загрузки	селектора
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 24
+prim1.asm
+
+
+
+1  1312	    00B0  00B4r				 dw	 offset	??0001	    ; и	дескр. сегмента	кодов защищ.
+1  1313	    00B2  0010				 dw	 (code_selec)		       ; режима	на нулевом уровне защиты
+1  1314	    00B4			 ??0001:
+1  1315	    00B4  33 C0				 xor	 ax,ax
+1  1316	    00B6  0F 00	D0			 lldt	 ax			 ; NULL	селектор в LDT
+1  1317	    00B9  B8 0020			 mov	 ax,(stk0_selec)	     ; селектор	сегмента SS
+1  1318	    00BC  8E D0				 mov	 ss,ax
+1  1319	    00BE  BC 0100			 mov	 sp,offset (stk0_size)
+1  1320	    00C1  B8 0048			 mov	 ax,(Gdata_selec)		; сегментный адрес данных prot mode
+1  1321	    00C4  8E D8				 mov	 ds,ax			 ; загрузка всех сегментных регистров
+1  1322	    00C6  8E C0				 mov	 es,ax			 ; для загрузки	селекторов и
+1  1323	    00C8  8E E0				 mov	 fs,ax			 ; дескрипторов	сегментов правильными
+1  1324	    00CA  8E E8				 mov	 gs,ax			 ; значениями всех полей
+   1325
+   1326					 ;
+   1327					 ; Шаг 14: вывод сообщения о переходе в	защищенный режим
+   1328					 ;
+   1329	    00CC  E8 0111			 call	 clr_disp		 ; очистим экран
+   1330
+   1331	    00CF  A1 003Er			 mov	 ax,[msg_addr]		 ; номер строки	на экране
+   1332	    00D2  FF 06	003Er			 inc	 [msg_addr]		 ; след. строка	на 1 больше
+   1333	    00D6  B1 A0				 mov	 cl,160			 ; длина строки	в байтах
+   1334	    00D8  F6 E1				 mul	 cl			 ; AX =	адрес сообщения	на экране
+   1335	    00DA  BE 0040r			 mov	 si,offset in_protected	 ; адрес строки	(источник)
+   1336	    00DD  8B F8				 mov	 di,ax			 ; адрес экрана	(приемник)
+   1337	    00DF  E8 00E4			 call	 disp_it		 ; вывести строку на экран
+   1338
+   1339					 ;
+   1340					 ; Шаг 15: загрузка в TR TSS
+   1341					 ;
+   1342	    00E2  B8 0018			 mov	 ax,task0_TSS_selec
+   1343	    00E5  0F 00	D8			 ltr	 ax
+   1344
+   1345					 ;
+   1346					 ; Шаг 16: возврат обратно в DOS через прерывание
+   1347					 ;
+   1348	    00E8  CD 14				 int	 20
+   1349
+   1350					 ;
+   1351					 ; Шаг 17: массив точек	входа по обработке прерываний
+   1352					 ;
+   1353	    00EA			 int_entry:
+   1354					       REPT    INTNO
+   1355						 call  disp			 ; процедура обработки прерывания
+   1356						 iret
+   1357					       ENDM
+1  1358	    00EA  E8 0051			 call  disp			 ; процедура обработки прерывания
+1  1359	    00ED  CF				 iret
+1  1360	    00EE  E8 004D			 call  disp			 ; процедура обработки прерывания
+1  1361	    00F1  CF				 iret
+1  1362	    00F2  E8 0049			 call  disp			 ; процедура обработки прерывания
+1  1363	    00F5  CF				 iret
+1  1364	    00F6  E8 0045			 call  disp			 ; процедура обработки прерывания
+1  1365	    00F9  CF				 iret
+1  1366	    00FA  E8 0041			 call  disp			 ; процедура обработки прерывания
+1  1367	    00FD  CF				 iret
+1  1368	    00FE  E8 003D			 call  disp			 ; процедура обработки прерывания
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 25
+prim1.asm
+
+
+
+1  1369	    0101  CF				 iret
+1  1370	    0102  E8 0039			 call  disp			 ; процедура обработки прерывания
+1  1371	    0105  CF				 iret
+1  1372	    0106  E8 0035			 call  disp			 ; процедура обработки прерывания
+1  1373	    0109  CF				 iret
+1  1374	    010A  E8 0031			 call  disp			 ; процедура обработки прерывания
+1  1375	    010D  CF				 iret
+1  1376	    010E  E8 002D			 call  disp			 ; процедура обработки прерывания
+1  1377	    0111  CF				 iret
+1  1378	    0112  E8 0029			 call  disp			 ; процедура обработки прерывания
+1  1379	    0115  CF				 iret
+1  1380	    0116  E8 0025			 call  disp			 ; процедура обработки прерывания
+1  1381	    0119  CF				 iret
+1  1382	    011A  E8 0021			 call  disp			 ; процедура обработки прерывания
+1  1383	    011D  CF				 iret
+1  1384	    011E  E8 001D			 call  disp			 ; процедура обработки прерывания
+1  1385	    0121  CF				 iret
+1  1386	    0122  E8 0019			 call  disp			 ; процедура обработки прерывания
+1  1387	    0125  CF				 iret
+1  1388	    0126  E8 0015			 call  disp			 ; процедура обработки прерывания
+1  1389	    0129  CF				 iret
+1  1390	    012A  E8 0011			 call  disp			 ; процедура обработки прерывания
+1  1391	    012D  CF				 iret
+1  1392	    012E  E8 000D			 call  disp			 ; процедура обработки прерывания
+1  1393	    0131  CF				 iret
+1  1394	    0132  E8 0009			 call  disp			 ; процедура обработки прерывания
+1  1395	    0135  CF				 iret
+1  1396	    0136  E8 0005			 call  disp			 ; процедура обработки прерывания
+1  1397	    0139  CF				 iret
+1  1398	    013A  E8 0001			 call  disp			 ; процедура обработки прерывания
+1  1399	    013D  CF				 iret
+   1400
+   1401					 ;
+   1402					 ; Шаг 18: монитор стандартной обработки прерываний
+   1403					 ;	   вычисляет номер вектора, выводит его	на экран
+   1404					 ;	   и возвращается в DOS
+   1405					 ;
+   1406	    013E			 disp:
+   1407	    013E  66| 33 C0			 xor	 eax,eax		 ; очистим число для преобразования
+   1408	    0141  58				 pop	 ax			 ; адрес возврата из стека
+   1409	    0142  2D 00EAr			 sub	 ax,offset int_entry
+   1410	    0145  C1 E8	02			 shr	 ax,TWO			 ; ax= номер вектора
+   1411	    0148  66| 33 F6			 xor	 esi,esi		 ; очистим адрес строки
+   1412	    014B  BE 005Cr			 mov	 si,offset int_num	 ; адрес строки	номера вектора
+   1413	    014E  B9 0004			 mov	 cx,WORDLEN		 ; число символов в строке
+   1414	    0151  E8 00B8			 call	 htoa			 ; HEX->ASCII (esi,cx,eax)
+   1415
+   1416	    0154  A1 003Er			 mov	 ax,[msg_addr]		 ; номер строки	на экране
+   1417	    0157  3D 0019			 cmp	 ax,025			 ; если	вышли за границу экрана
+   1418	    015A  77 12	90 90			 ja	 no_disp		 ; то не выводим строку
+   1419	    015E  FF 06	003Er			 inc	 [msg_addr]		 ; след. строка	на 1 больше
+   1420	    0162  B1 A0				 mov	 cl,160			 ; длина строки	в байтах
+   1421	    0164  F6 E1				 mul	 cl			 ; AX =	адрес сообщения	на экране
+   1422	    0166  BE 0052r			 mov	 si,offset int_msg	 ; адрес строки	(источник)
+   1423	    0169  8B F8				 mov	 di,ax			 ; адрес экрана	(приемник)
+   1424	    016B  E8 0058			 call	 disp_it		 ; вывести строку на экран
+   1425	    016E			 no_disp:
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 26
+prim1.asm
+
+
+
+   1426
+   1427					 ;
+   1428					 ; Шаг 19: возврат в реальный режим процессора
+   1429					 ;
+   1430						 goto_real dmy_selec,code,stk0,stk0_size,Gdata
+1  1431	    016E  FA				 cli
+1  1432	    016F  B8 0058			 mov	 ax,(dmy_selec)		 ; селектор данных реального режима
+1  1433	    0172  8E C0				 mov	 es,ax			 ; для загрузки	дескрипторов сегм.
+1  1434	    0174  8E D8				 mov	 ds,ax			 ; регистров правильной	для DOS
+1  1435	    0176  8E E0				 mov	 fs,ax			 ; границей сегментов и	атрибутами
+1  1436	    0178  8E E8				 mov	 gs,ax			 ; доступа
+1  1437	    017A  8E D0				 mov	 ss,ax
+1  1438	    017C  EA				 db	 0eah			 ; far jmp для загрузки	дескриптора
+1  1439	    017D  0181r				 dw	 OFFSET	 ??0002		; сегмента кодов правильной для	DOS
+1  1440	    017F  0060				 dw	 rc_selec		 ; границей и атрибутами доступа
+1  1441	    0181			 ??0002:
+1  1442	    0181  0F 20	C0			 mov	 eax,cr0
+1  1443	    0184  66| 83 E0 FE			 and	 eax,not prot_enable	 ; перекл. проц. в реальный режим
+1  1444	    0188  0F 22	C0			 mov	 cr0,eax		 ; мы в	реальном режиме
+1  1445	    018B  EB 00				 jmp	 $+2			 ; near	jmp для	сброса очереди команд
+1  1446	    018D  EA				 db	 0eah			 ; far jmp для загрузки	селектора
+1  1447	    018E  0192r				 dw	 offset	??0003	    ; и	дескриптора кодов правильным
+1  1448	    0190  0000s				 dw	 (code)			 ; в DOS адресом базы сегмента
+1  1449	    0192			 ??0003:
+1  1450	    0192  B8 0000s			 mov	 ax,(Gdata)		  ; сегментный адрес данных real mode
+1  1451	    0195  8E D8				 mov	 ds,ax			 ; загрузка всех сегментных регистров
+1  1452	    0197  8E C0				 mov	 es,ax			 ; для загрузки	селекторов и
+1  1453	    0199  8E E0				 mov	 fs,ax			 ; дескрипторов	сегментов правильным
+1  1454	    019B  8E E8				 mov	 gs,ax			 ; в DOS адресом базы
+1  1455	    019D  B8 0000s			 mov	 ax,(stk0)	       ; сегментный адрес стека	real mode
+1  1456	    01A0  8E D0				 mov	 ss,ax			 ; правильный адрес сегмента
+1  1457	    01A2  BC 0100			 mov	 sp,offset (stk0_size)	    ; стек реального режима
+1  1458	    01A5  0F 01	1E 000Cr		 lidt	 [pold]			 ; таблица прерываний реального	режима
+1  1459	    01AA  B0 D1				 mov	 al,A20_PORT		 ; Закрыть адресную шину A20
+1  1460	    01AC  E6 64				 out	 STATUS_PORT,al
+1  1461	    01AE  B0 DD				 mov	 al,A20_OF
+1  1462	    01B0  E6 60				 out	 KBD_PORT_A,al
+1  1463	    01B2  B8 000F			 mov	 ax,00fh		 ; разрешение немаскируемых прерываний
+1  1464	    01B5  E6 70				 out	 CMOS_PORT,al
+1  1465	    01B7  EB 00				 jmp	 $+2			 ; небольшая задержка
+1  1466	    01B9  E4 71				 in	 al,CMOS_PORT+1
+1  1467	    01BB  A0 0068r			 mov	 al,[int_mask]		 ; восстановим маску прерываний
+1  1468	    01BE  E6 21				 out	 INT_MASK_PORT,al	 ; разрешим маскируемые	прерывания
+1  1469	    01C0  FB				 sti
+   1470
+   1471					 ;
+   1472					 ; Шаг 20: возврат в DOS
+   1473					 ;
+   1474	    01C1  B8 4C00			 mov	 ax,4c00h		 ; Exit	Process
+   1475	    01C4  CD 21				 int	 21h
+   1476
+   1477	    01C6			 main	 endp
+   1478
+   1479					 ;
+   1480					 ; Процедура вывода строки на дисплей в	защищенном режиме
+   1481					 ; Вход:
+   1482					 ;	 DS:SI - адрес строки символов ASCIZ
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 27
+prim1.asm
+
+
+
+   1483					 ;	    DI - смещение в видеопамяти
+   1484					 ; Выход:
+   1485					 ;	 DS:SI - следующий за строкой байт
+   1486					 ;	    DI - адрес следующего байта	экрана
+   1487					 ;
+   1488	    01C6			 disp_it	 proc	 near
+   1489	    01C6  50				 push	 ax
+   1490	    01C7  06				 push	 es
+   1491
+   1492	    01C8  B8 0040			 mov	 ax,video_selec		 ; селектор видеопамяти
+   1493	    01CB  8E C0				 mov	 es,ax
+   1494	    01CD  B4 07				 mov	 ah,attribute		 ; атрибут символов
+   1495	    01CF  47				 inc	 di			 ; округлим до границы слова
+   1496	    01D0  83 E7	FE			 and	 di,NOT	1
+   1497	    01D3			 disp_loop:
+   1498	    01D3  AC				 lodsb				 ; символ из строки
+   1499	    01D4  3C 00				 cmp	 al,0			 ; конец строки	?
+   1500	    01D6  74 05	90 90			 jz	 end_disp		 ; z, да, возврат
+   1501	    01DA  AB				 stosw				 ; символ в видеопамять
+   1502	    01DB  EB F6				 jmp	 disp_loop		 ; повторить до	конца строки
+   1503	    01DD			 end_disp:
+   1504	    01DD  07				 pop	 es
+   1505	    01DE  58				 pop	 ax
+   1506	    01DF  C3				 ret
+   1507	    01E0			 disp_it	 endp
+   1508
+   1509					 ;
+   1510					 ; Процедура очистки дисплея в защищенном режиме
+   1511					 ; Вход:
+   1512					 ; Выход:
+   1513					 ;
+   1514	    01E0			 clr_disp	 proc	 near
+   1515	    01E0  50				 push	 ax
+   1516	    01E1  51				 push	 cx
+   1517	    01E2  57				 push	 di
+   1518	    01E3  06				 push	 es
+   1519
+   1520	    01E4  B8 0040			 mov	 ax,video_selec		 ; селектор видеопамяти
+   1521	    01E7  8E C0				 mov	 es,ax
+   1522	    01E9  B9 8000			 mov	 cx,CRT_SIZE		 ; размер видеопамяти
+   1523	    01EC  C1 E9	02			 shr	 cx,TWO			 ; в словах
+   1524	    01EF  33 FF				 xor	 di,di
+   1525	    01F1  B4 07				 mov	 ah,attribute
+   1526	    01F3  B0 20				 mov	 al,space
+   1527	    01F5  F3> AB			 rep	 stosw			 ; очистим экран
+   1528
+   1529	    01F7  07				 pop	 es
+   1530	    01F8  5F				 pop	 di
+   1531	    01F9  59				 pop	 cx
+   1532	    01FA  58				 pop	 ax
+   1533	    01FB  C3				 ret
+   1534	    01FC			 clr_disp	 endp
+   1535
+   1536					 ;
+   1537					 ; Процедура преобразования HEX->ASCII
+   1538					 ; Вход:
+   1539					 ;	 DS:ESI	- адрес	строки символов, CX - ее длина,
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 28
+prim1.asm
+
+
+
+   1540					 ;	 EAX	- число	для преобразования
+   1541					 ; Выход:
+   1542					 ;	 DS:ESI	- адрес	следующего за строкой символа
+   1543					 ;
+   1544	    01FC  30 31	32 33 34 35 36+	 htoa_tab	 db	 '0123456789ABCDEF'
+   1545		  37 38	39 41 42 43 44+
+   1546		  45 46
+   1547	    020C			 htoa		 proc	 near
+   1548	    020C  66| 56			 push	 esi
+   1549	    020E  66| 50			 push	 eax
+   1550	    0210  66| 53			 push	 ebx
+   1551	    0212  66| 51			 push	 ecx
+   1552
+   1553	    0214  66| 33 DB			 xor	 ebx,ebx
+   1554	    0217  03 F1				 add	 si,cx
+   1555	    0219  4E				 dec	 si			 ; встанем на конец строки
+   1556	    021A			 htoa_loop:
+   1557	    021A  8A D8				 mov	 bl,al
+   1558	    021C  80 E3	0F			 and	 bl,0fh
+   1559	    021F  2E: 67| 8A 9B	      +		 mov	 bl,cs:[ebx+htoa_tab]	 ; ASCII код символа
+   1560		  000001FCr
+   1561	    0227  67| 88 1E			 mov	 byte ptr [esi],bl	 ; его в строку	символов
+   1562	    022A  66| 4E			 dec	 esi			 ; продвинемся в строке	символов
+   1563	    022C  66| C1 E8 04			 shr	 eax,4			 ; продвинемся в числе на тетраду
+   1564	    0230  E2 E8				 loop	 htoa_loop
+   1565
+   1566	    0232  66| 59			 pop	 ecx
+   1567	    0234  66| 5B			 pop	 ebx
+   1568	    0236  66| 58			 pop	 eax
+   1569	    0238  66| 5E			 pop	 esi
+   1570	    023A  03 F1				 add	 si,cx			 ; встанем за строкой
+   1571	    023C  C3				 ret
+   1572	    023D			 htoa		 endp
+   1573
+   1574		  =023D			 code_size	 equ	 $-code_beg
+   1575		  =023C			 code_limit	 equ	 code_size-1
+   1576	    023D			 code		 ends
+   1577						 end	 main
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 29
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??0000				  Near	 CODE:005B
+??0001				  Near	 CODE:00B4
+??0002				  Near	 CODE:0181
+??0003				  Near	 CODE:0192
+??DATE				  Text	 "19/03/97"
+??FILENAME			  Text	 "prim1	  "
+??TIME				  Text	 "11:17:00"
+??VERSION			  Number 030A
+@CPU				  Text	 0F8FH
+@CURSEG				  Text	 CODE
+@FILENAME			  Text	 PRIM1
+@WORDSIZE			  Text	 2
+A20_OF				  Number 00DD
+A20_ON				  Number 00DF
+A20_PORT			  Number 00D1
+ACC2_AVAIL			  Number 0010
+ACC2_B_BIG			  Number 0040
+ACC2_B_SMALL			  Number 0000
+ACC2_G_BYTE			  Number 0000
+ACC2_G_PAGE			  Number 0080
+ACC_ACCESS			  Number 0001
+ACC_CALL2			  Number 0004
+ACC_CALL3			  Number 000C
+ACC_CODERD			  Number 0002
+ACC_CONFORM			  Number 0004
+ACC_CSEG			  Number 0018
+ACC_DATAWR			  Number 0002
+ACC_DPLMSK			  Number 0060
+ACC_DSEG			  Number 0010
+ACC_EXPDOWN			  Number 0004
+ACC_INT2			  Number 0006
+ACC_INT3			  Number 000E
+ACC_LDT				  Number 0002
+ACC_PRESENT			  Number 0080
+ACC_TASK			  Number 0005
+ACC_TRAP2			  Number 0007
+ACC_TRAP3			  Number 000F
+ACC_TSS2			  Number 0001
+ACC_TSS2B			  Number 0003
+ACC_TSS3			  Number 0009
+ACC_TSS3B			  Number 000B
+ACC_TSSBSY			  Number 0002
+ATTRIBUTE			  Number 0007
+BIOS_SELEC			  Number 0068
+B_DATA_ADDR			  Number 0400
+B_DATA_SIZE			  Number 0300
+CALL_ACC			  Number 008C
+CLR_DISP			  Near	 CODE:01E0
+CMOS_PORT			  Number 0070
+CODE_ACC			  Number 009A
+CODE_BEG			  Number CODE:0000
+CODE_LIMIT			  Number 023C
+CODE_REAL			  Number 009A
+CODE_SELEC			  Number 0010
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 30
+Symbol Table
+
+
+
+CODE_SIZE			  Number 023D
+COLOR_PORT			  Number 03D4
+COLOR_SEG			  Number B800
+CONF_ACC			  Number 009A
+CR0_ALIG			  Number 00040000
+CR0_NUMEMU			  Number 0004
+CR0_NUMERR			  Number 0020
+CR0_NUMEXT			  Number 0010
+CR0_NUMPRES			  Number 0002
+CR0_TASKSW			  Number 0008
+CR3_ADDRCTL			  Number 0FFF
+CR3_ADDRMSK			  Number FFFFF000
+CR3_PCD				  Number 0010
+CR3_PWT				  Number 0008
+CRO_PROTENA			  Number 0001
+CRT_ADDR			  Number 000B8000
+CRT_LOW				  Number 8000
+CRT_SEG				  Number 000B
+CRT_SIZE			  Number 8000
+DATA_ACC			  Number 0092
+DATA_REAL			  Number 0092
+DISP				  Near	 CODE:013E
+DISP_IT				  Near	 CODE:01C6
+DISP_LOOP			  Near	 CODE:01D3
+DMY_BEG				  Number DMY:0000
+DMY_LIMIT			  Number FFFF
+DMY_SELEC			  Number 0058
+DMY_SIZE			  Number 0080
+DOS_STACK_BEG			  Number DOS_STACK:0000
+DOUBLELEN			  Number 0008
+DPL_0				  Number 0000
+DPL_1				  Number 0020
+DPL_2				  Number 0040
+DPL_3				  Number 0060
+DRCTRL_1BL0			  Number 0000
+DRCTRL_1BL1			  Number 0000
+DRCTRL_1BL2			  Number 0000
+DRCTRL_1BL3			  Number 0000
+DRCTRL_2BL0			  Number 00040000
+DRCTRL_2BL1			  Number 00400000
+DRCTRL_2BL2			  Number 04000000
+DRCTRL_2BL3			  Number 40000000
+DRCTRL_4BL0			  Number 000C0000
+DRCTRL_4BL1			  Number 00C00000
+DRCTRL_4BL2			  Number 0C000000
+DRCTRL_4BL3			  Number C0000000
+DRCTRL_GBL0			  Number 0002
+DRCTRL_GBL1			  Number 0008
+DRCTRL_GBL2			  Number 0020
+DRCTRL_GBL3			  Number 0080
+DRCTRL_GBLE			  Number 0200
+DRCTRL_INST0			  Number 0000
+DRCTRL_INST1			  Number 0000
+DRCTRL_INST2			  Number 0000
+DRCTRL_INST3			  Number 0000
+DRCTRL_LCL0			  Number 0001
+DRCTRL_LCL1			  Number 0004
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 31
+Symbol Table
+
+
+
+DRCTRL_LCL2			  Number 0010
+DRCTRL_LCL3			  Number 0040
+DRCTRL_LCLE			  Number 0100
+DRCTRL_MSK0			  Number 0003
+DRCTRL_MSK1			  Number 000C
+DRCTRL_MSK2			  Number 0030
+DRCTRL_MSK3			  Number 00C0
+DRCTRL_MSKE			  Number 0300
+DRCTRL_MSKL0			  Number 000C0000
+DRCTRL_MSKL1			  Number 00C00000
+DRCTRL_MSKL2			  Number 0C000000
+DRCTRL_MSKL3			  Number C0000000
+DRCTRL_MSKT0			  Number 00030000
+DRCTRL_MSKT1			  Number 00300000
+DRCTRL_MSKT2			  Number 03000000
+DRCTRL_MSKT3			  Number 30000000
+DRCTRL_RW0			  Number 00030000
+DRCTRL_RW1			  Number 00300000
+DRCTRL_RW2			  Number 03000000
+DRCTRL_RW3			  Number 30000000
+DRCTRL_WO0			  Number 00010000
+DRCTRL_WO1			  Number 00100000
+DRCTRL_WO2			  Number 01000000
+DRCTRL_WO3			  Number 10000000
+DRSTAT_B0			  Number 0001
+DRSTAT_B1			  Number 0002
+DRSTAT_B2			  Number 0004
+DRSTAT_B3			  Number 0008
+DRSTAT_EMU			  Number 2000
+DRSTAT_TASK			  Number 8000
+DRSTAT_TBIT			  Number 4000
+DSCPSIZE			  Number 0008
+END_DISP			  Near	 CODE:01DD
+ERR_EXT				  Number 0001
+ERR_IDT				  Number 0002
+ERR_IN_INT0			  Number 0000
+ERR_IN_INT1			  Number 0000
+ERR_IN_INT10			  Number 0001
+ERR_IN_INT11			  Number 0001
+ERR_IN_INT12			  Number 0001
+ERR_IN_INT13			  Number 0001
+ERR_IN_INT14			  Number 0001
+ERR_IN_INT16			  Number 0000
+ERR_IN_INT2			  Number 0000
+ERR_IN_INT3			  Number 0000
+ERR_IN_INT4			  Number 0000
+ERR_IN_INT5			  Number 0000
+ERR_IN_INT6			  Number 0000
+ERR_IN_INT7			  Number 0000
+ERR_IN_INT8			  Number 0001
+ERR_IN_INT9			  Number 0000
+ERR_LDT				  Number 0004
+ERR_RESERVED			  Number 0000
+ERR_SELEC			  Number FFF8
+FILLIDT				  Near	 CODE:001D
+FL_AC				  Number 00040000
+FL_AF				  Number 0010
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 32
+Symbol Table
+
+
+
+FL_CF				  Number 0001
+FL_DF				  Number 0400
+FL_IF				  Number 0200
+FL_IOPL0			  Number 0000
+FL_IOPL1			  Number 1000
+FL_IOPL2			  Number 2000
+FL_IOPL3			  Number 3000
+FL_IOPLMSK			  Number 3000
+FL_NT				  Number 4000
+FL_OF				  Number 0800
+FL_PF				  Number 0004
+FL_RF				  Number 00010000
+FL_SET				  Number 0002
+FL_SF				  Number 0080
+FL_TF				  Number 0100
+FL_VM				  Number 00020000
+FL_ZF				  Number 0040
+GDATA_BEG			  Number GDATA:0000
+GDATA_LIMIT			  Number 0068
+GDATA_SELEC			  Number 0048
+GDATA_SIZE			  Number 0069
+GDT_LIMIT			  Number 006F
+GDT_PHYS_TAB			  Word	 GDATA:0012
+GDT_SELEC			  Number 0008
+GDT_SIZE			  Number 0070
+GDT_TAB				  Qword	 GDT:0000
+GDT_TAB_COUNT			  Number 000B
+HTOA				  Near	 CODE:020C
+HTOA_LOOP			  Near	 CODE:021A
+HTOA_TAB			  Byte	 CODE:01FC
+IDT_LIMIT			  Number 00A7
+IDT_SIZE			  Number 00A8
+IDT_TAB				  Number IDT:0000
+INTNO				  Number 0015
+INTSIZE				  Number 0004
+INT_ACC				  Number 008E
+INT_ENTRY			  Near	 CODE:00EA
+INT_MASK			  Byte	 GDATA:0068
+INT_MASK_PORT			  Number 0021
+INT_MSG				  Byte	 GDATA:0052
+INT_NUM				  Byte	 GDATA:005C
+INT_SELEC			  Number 0050
+IN_PROTECTED			  Byte	 GDATA:0040
+KBD_PORT_A			  Number 0060
+KBD_PORT_B			  Number 0061
+MAIN				  Far	 CODE:0000
+MONO_ADDR			  Number 000B0000
+MONO_LOW			  Number 0000
+MONO_PORT			  Number 03B4
+MONO_SEG			  Number B000
+MONO_SIZE			  Number 1000
+MSG_ADDR			  Word	 GDATA:003E
+NO_DISP				  Near	 CODE:016E
+NULL_SELEC			  Number 0000
+PDBR_OFFSET			  Number 1000
+PGDT				  Pword	 GDATA:0000
+PGERR_PROT			  Number 0001
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 33
+Symbol Table
+
+
+
+PGERR_SUPERV			  Number 0004
+PGERR_WRITE			  Number 0002
+PG_ACCESSED			  Number 0020
+PG_ADDRCTL			  Number 0FFF
+PG_ADDRMSK			  Number FFFFF000
+PG_CACHEDIS			  Number 40000000
+PG_DIRMSK			  Number FFC00000
+PG_DIRSHIFT			  Number 0016
+PG_DIRTY			  Number 0040
+PG_ENABLE			  Number 80000000
+PG_NOTWRITE			  Number 20000000
+PG_PGMSK			  Number 003FF000
+PG_PGSHIFT			  Number 000C
+PG_PRESENT			  Number 0001
+PG_USER				  Number 0004
+PG_WRITE			  Number 0002
+PG_WRPROT			  Number 00010000
+PIDT				  Pword	 GDATA:0006
+POLD				  Pword	 GDATA:000C
+PORT_6845			  Number 0063
+PROT_ENABLE			  Number 0001
+PTE_MASK			  Number 0007
+RC_SELEC			  Number 0060
+REAL_ES				  Word	 GDATA:0066
+REAL_SP				  Word	 GDATA:0064
+REAL_SS				  Word	 GDATA:0062
+RPL_0				  Number 0000
+RPL_1				  Number 0001
+RPL_2				  Number 0002
+RPL_3				  Number 0003
+SHUT_DOWN			  Number 00FE
+SPACE				  Number 0020
+STACK_ACC			  Number 0096
+STACK_SIZE			  Number 0400
+STATUS_PORT			  Number 0064
+STK0_BEG			  Number STK0:0000
+STK0_LIMIT			  Number 00FF
+STK0_SELEC			  Number 0020
+STK0_SIZE			  Number 0100
+STK1_BEG			  Number STK1:0000
+STK1_LIMIT			  Number 00FF
+STK1_SELEC			  Number 0029
+STK1_SIZE			  Number 0100
+STK2_BEG			  Number STK2:0000
+STK2_LIMIT			  Number 00FF
+STK2_SELEC			  Number 0032
+STK2_SIZE			  Number 0100
+STK3_BEG			  Number STK3:0000
+STK3_LIMIT			  Number 00FF
+STK3_SELEC			  Number 003B
+STK3_SIZE			  Number 0100
+STK_DOS_LIMIT			  Number 00FF
+STK_DOS_SIZE			  Number 0100
+TASK0_TSS_BEG			  Number TASK0_TSS:0000
+TASK0_TSS_LIMIT			  Number 0067
+TASK0_TSS_SELEC			  Number 0018
+TASK0_TSS_SIZE			  Number 0068
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 34
+Symbol Table
+
+
+
+TASK_ACC			  Number 0085
+TBL_ADDR			  Number FFF8
+TBL_GDT				  Number 0000
+TBL_LDT				  Number 0004
+TRAP_ACC			  Number 008F
+TSS_ACC				  Number 0089
+TWO				  Number 0002
+V86_FLAGS			  Number 00023202
+VIDEO_SELEC			  Number 0040
+VIRTUAL_MODE			  Number 0001
+WORDLEN				  Number 0004
+
+Macro Name
+
+BUILD_DT
+BUILD_GDTR
+BUILD_IDTR
+CALLF
+D_CALL
+D_CODE
+D_DATA
+D_INT
+D_LDT
+D_TASK
+D_TSS
+GOTO_PROT
+GOTO_REAL
+JMPF
+TSS_CR3
+TSS_REGS
+TSS_SEG
+TSS_STACK
+
+Structure Name			  Type	Offset
+
+CALLSTK286
+ SAVIP				  Word	 0000
+ SAVCS				  Word	 0002
+ CALLNOLVL286LEN		  Word	 0004
+ SAVSP				  Word	 0004
+ SAVSS				  Word	 0006
+ CALLLVL286LEN			  Word	 0008
+CALLSTK386
+ SAVEIP				  Dword	 0000
+ SAVECS				  Dword	 0004
+ CALLNOLVL386LEN		  Word	 0008
+ SAVESP				  Dword	 0008
+ SAVESS				  Dword	 000C
+ CALLLVL386LEN			  Word	 0010
+DSCP
+ D_LIM1				  Word	 0000
+ D_BASE1			  Word	 0002
+ D_BASE2			  Byte	 0004
+ D_TYPE				  Byte	 0005
+ D_LIM2				  Byte	 0006
+ D_BASE3			  Byte	 0007
+ERR_TBL
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 35
+Symbol Table
+
+
+
+ ERR_INT0			  Byte	 0000
+ ERR_INT1			  Byte	 0001
+ ERR_INT2			  Byte	 0002
+ ERR_INT3			  Byte	 0003
+ ERR_INT4			  Byte	 0004
+ ERR_INT5			  Byte	 0005
+ ERR_INT6			  Byte	 0006
+ ERR_INT7			  Byte	 0007
+ ERR_INT8			  Byte	 0008
+ ERR_INT9			  Byte	 0009
+ ERR_INT10			  Byte	 000A
+ ERR_INT11			  Byte	 000B
+ ERR_INT12			  Byte	 000C
+ ERR_INT13			  Byte	 000D
+ ERR_INT14			  Byte	 000E
+ ERR_INT15			  Byte	 000F
+ ERR_INT16			  Byte	 0010
+INTSTK286
+ OLDIP				  Word	 0000
+ OLDCS				  Word	 0002
+ OLDFLG				  Word	 0004
+ INTNOLVL286LEN			  Word	 0006
+ OLDSP				  Word	 0006
+ OLDSS				  Word	 0008
+ INTLVL286LEN			  Word	 000A
+INTSTK386
+ OLDEIP				  Dword	 0000
+ OLDECS				  Dword	 0004
+ OLDEFLG			  Dword	 0008
+ INTNOLVL386LEN			  Word	 000C
+ OLDESP				  Dword	 000C
+ OLDESS				  Dword	 0010
+ INTLVL386LEN			  Word	 0014
+ OLDEES				  Dword	 0014
+ OLDEDS				  Dword	 0018
+ OLDEFS				  Dword	 001C
+ OLDEGS				  Dword	 0020
+ V86STKLEN			  Word	 0024
+PUSHADDEF
+ P_EDI				  Dword	 0000
+ P_ESI				  Dword	 0004
+ P_EBP				  Dword	 0008
+ P_ESP				  Dword	 000C
+ P_EBX				  Dword	 0010
+ P_EDX				  Dword	 0014
+ P_ECX				  Dword	 0018
+ P_EAX				  Dword	 001C
+PUSHADEF
+ P_DI				  Word	 0000
+ P_SI				  Word	 0002
+ P_BP				  Word	 0004
+ P_SP				  Word	 0006
+ P_BX				  Word	 0008
+ P_DX				  Word	 000A
+ P_CX				  Word	 000C
+ P_AX				  Word	 000E
+TSS286DF
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 36
+Symbol Table
+
+
+
+ T_BLINK			  Word	 0000
+ T_SP0				  Word	 0002
+ T_SS0				  Word	 0004
+ T_SP1				  Word	 0006
+ T_SS1				  Word	 0008
+ T_SP2				  Word	 000A
+ T_SS2				  Word	 000C
+ T_IP				  Word	 000E
+ T_FLAGS			  Word	 0010
+ T_AX				  Word	 0012
+ T_CX				  Word	 0014
+ T_DX				  Word	 0016
+ T_BX				  Word	 0018
+ T_SP				  Word	 001A
+ T_BP				  Word	 001C
+ T_SI				  Word	 001E
+ T_DI				  Word	 0020
+ T_ES				  Word	 0022
+ T_CS				  Word	 0024
+ T_SS				  Word	 0026
+ T_DS				  Word	 0028
+ T_LDT				  Word	 002A
+TSS386DF
+ T_EBLINK			  Dword	 0000
+ T_ESP0				  Dword	 0004
+ T_ESS0				  Dword	 0008
+ T_ESP1				  Dword	 000C
+ T_ESS1				  Dword	 0010
+ T_ESP2				  Dword	 0014
+ T_ESS2				  Dword	 0018
+ T_CR3				  Dword	 001C
+ T_EIP				  Dword	 0020
+ T_EFLAGS			  Dword	 0024
+ T_EAX				  Dword	 0028
+ T_ECX				  Dword	 002C
+ T_EDX				  Dword	 0030
+ T_EBX				  Dword	 0034
+ T_ESP				  Dword	 0038
+ T_EBP				  Dword	 003C
+ T_ESI				  Dword	 0040
+ T_EDI				  Dword	 0044
+ T_EES				  Dword	 0048
+ T_ECS				  Dword	 004C
+ T_ESS				  Dword	 0050
+ T_EDS				  Dword	 0054
+ T_EFS				  Dword	 0058
+ T_EGS				  Dword	 005C
+ T_ELDT				  Dword	 0060
+ T_TRAP				  Word	 0064
+ T_IOM				  Word	 0066
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+CODE				  16  023D Para	  Public  CODE
+DMY				  16  0080 Para	  Public  DMY
+DOS_STACK			  32  0100 Para	  Stack	  STACK
+GDATA				  16  0069 Para	  Public  GDATA
+Turbo Assembler	 Version 3.1	    19/03/97 11:17:01	    Page 37
+Symbol Table
+
+
+
+GDT				  16  0070 Para	  Public  GDT
+IDT				  16  00A8 Para	  Public  IDT
+STK0				  16  0100 Para	  Public  STK0
+STK1				  16  0100 Para	  Public  STK1
+STK2				  16  0100 Para	  Public  STK2
+STK3				  16  0100 Para	  Public  STK3
+TASK0_TSS			  16  0068 Para	  Public  TASK0
+
