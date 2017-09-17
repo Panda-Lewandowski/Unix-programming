@@ -1,0 +1,124 @@
+
+                  ฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿฿
+                          SOURCER DEFINITION FILE
+                  ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 1: CONTROL INFORMATION   ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+Analysis Options = a b c d e f g h i j k l m n o p Q R S t u v w x y z
+uP               = 8088
+File format      = lst
+Label type       = Decimal
+Remarks          = All
+Segment display  = Hex
+Target Assembler = NONE
+Code style       = Fragment
+Drive (output)   = Z
+Output filename  = Temp.lst
+Passes           = 9
+Xref             = ON
+
+
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 2: RANGE DEFINITION      ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+ ออออ Segments ออออออออออออออออออออออออออ
+
+  begin      end      default	   seg	 seg          seg
+ seg:off     off     ds     es	   type	 size         value
+ -------     ----    ----   ----   ----- -----        -----
+020C:05E2    0946    020C   020C   auto	 use16       ; 020C
+
+ ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ Section 3: REFERENCE DEFINITIONS ฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑฑ
+
+ ออออ Subroutines อออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+020C:072F    sub			       ; sub_1
+020C:07B9    sub			       ; sub_2
+020C:07D9    sub			       ; sub_3
+020C:0806    sub			       ; sub_4
+020C:0870    sub			       ; sub_5
+
+ ออออ Locations อออออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+020C:061B    loc			       ; loc_1
+020C:0622    loc			       ; loc_2
+020C:0628    loc			       ; loc_3
+020C:063F    loc			       ; loc_4
+020C:064A    loc			       ; loc_5
+020C:064C    loc			       ; loc_6
+020C:067B    loc			       ; loc_7
+020C:0682    loc			       ; loc_8
+020C:0688    loc			       ; loc_9
+020C:068E    loc			       ; loc_10
+020C:0697    loc			       ; loc_11
+020C:06A1    loc			       ; loc_12
+020C:06A7    loc			       ; loc_13
+020C:06AA    loc			       ; loc_14
+020C:06EA    loc			       ; loc_15
+020C:06EC    loc			       ; loc_16
+020C:06FB    loc			       ; loc_17
+020C:070E    loc			       ; loc_18
+020C:0722    loc			       ; loc_19
+020C:0727    loc			       ; loc_20
+020C:0760    loc			       ; loc_21
+020C:077C    loc			       ; loc_22
+020C:078E    loc			       ; loc_23
+020C:07A3    loc			       ; loc_24
+020C:07A5    loc			       ; loc_25
+020C:07D0    loc			       ; loc_26
+020C:07D5    loc			       ; loc_27
+020C:07D8    loc			       ; loc_ret_28
+020C:07F8    loc			       ; loc_29
+020C:07FD    loc			       ; loc_30
+020C:0800    loc			       ; loc_ret_31
+020C:0816    forced, od 020C
+020C:0855    loc			       ; loc_32
+020C:0860    loc			       ; loc_33
+020C:086B    loc			       ; loc_34
+020C:087D    forced, od B000
+020C:0898    loc			       ; loc_35
+020C:08B6    loc			       ; loc_36
+020C:08D3    loc			       ; loc_37
+020C:08DE    loc			       ; loc_38
+020C:08ED    loc			       ; loc_39
+020C:08F3    loc			       ; loc_40
+020C:090E    loc			       ; loc_41
+020C:0915    loc			       ; loc_42
+020C:0918    loc			       ; loc_43
+020C:091B    loc			       ; loc_44
+020C:0938    loc			       ; loc_45
+020C:0948    loc			       ; loc_46
+020C:0950    loc			       ; loc_47
+020C:0955    loc			       ; loc_48
+
+ ออออ Data Items ออออออออออออออออออออออออ
+  seg:off    type & options	labels & comments
+  -------    --------------	----------------------------------------------
+0000:0070    dw, r 2			       ; data_1
+0040:003F    db				       ; data_2
+0040:0040    db				       ; data_3
+0040:004A    db				       ; data_4
+0040:0062    db				       ; data_5
+0040:006C    dw				       ; data_6
+0040:006E    dw				       ; data_7
+0040:0070    db				       ; data_8
+0040:0084    db				       ; data_9
+0040:0100    db				       ; data_10
+0040:0314    dw				       ; data_11
+020C:00A4    db				       ; data_12
+020C:019A    db				       ; data_13
+020C:01A3    db				       ; data_14
+020C:01A8    db				       ; data_15
+020C:02A7    db				       ; data_16
+020C:02A8    dw				       ; data_17
+020C:0314    dw				       ; data_18
+020C:06E9    dw, r 2			       ; data_19
+020C:0802    dw				       ; data_20
+020C:0804    dw				       ; data_21
+020C:08A7    db				       ; data_22
+020C:08A8    db				       ; data_23
+32F6:93E9    dw, r 2			       ; data_24
+B000:B000    db				       ; data_25
