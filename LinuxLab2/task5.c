@@ -1,6 +1,6 @@
 /*
-* Написать программу, в которой предок и потомок обмениваются 
-* сообщением через программный канал.
+* РќР°РїРёСЃР°С‚СЊ РїСЂРѕРіСЂР°РјРјСѓ, РІ РєРѕС‚РѕСЂРѕР№ РїСЂРµРґРѕРє Рё РїРѕС‚РѕРјРѕРє РѕР±РјРµРЅРёРІР°СЋС‚СЃСЏ 
+* СЃРѕРѕР±С‰РµРЅРёРµРј С‡РµСЂРµР· РїСЂРѕРіСЂР°РјРјРЅС‹Р№ РєР°РЅР°Р».
 */
 
 #include <stdio.h> //printf
@@ -28,62 +28,60 @@ void parent_sigint_catcher(int signum)
 int main()
 {
 	int child;
-	int descr[2]; //дескриптор _одного_ программного канала
-	//[0] - выход для чтения, [1] - выход для записи
-	//потомок унаследует открытый программный канал предка
+	int descr[2]; //РґРµСЃРєСЂРёРїС‚РѕСЂ _РѕРґРЅРѕРіРѕ_ РїСЂРѕРіСЂР°РјРјРЅРѕРіРѕ РєР°РЅР°Р»Р°
+	//[0] - РІС‹С…РѕРґ РґР»СЏ С‡С‚РµРЅРёСЏ, [1] - РІС‹С…РѕРґ РґР»СЏ Р·Р°РїРёСЃРё
+	//РїРѕС‚РѕРјРѕРє СѓРЅР°СЃР»РµРґСѓРµС‚ РѕС‚РєСЂС‹С‚С‹Р№ РїСЂРѕРіСЂР°РјРјРЅС‹Р№ РєР°РЅР°Р» РїСЂРµРґРєР°
 	if ( pipe(descr) == -1)
 	{
-        perror( "Couldn't pipe." );
+        	perror( "Couldn't pipe." );
 		exit(1);
 	}
 
 	child = fork();
 	if ( child == -1 )
 	{
-        perror( "Couldn't fork." );
+        	perror( "Couldn't fork." );
 		exit(1);
 	}
 	if ( child == 0 )
 	{
-        signal(SIGINT, child_sigint_catcher);
-		
-        close( descr[1] ); //потомок ничего не запишет в канал
+		signal(SIGINT, child_sigint_catcher);
+
+		close( descr[1] ); //РїРѕС‚РѕРјРѕРє РЅРёС‡РµРіРѕ РЅРµ Р·Р°РїРёС€РµС‚ РІ РєР°РЅР°Р»
 
 		char msg[64];
 		memset( msg, 0, 64 );
 		int i = 0;
-		
 
-		//последовательно считываем из программного канала по 1 символу
+		//РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕ СЃС‡РёС‚С‹РІР°РµРј РёР· РїСЂРѕРіСЂР°РјРјРЅРѕРіРѕ РєР°РЅР°Р»Р° РїРѕ 1 СЃРёРјРІРѕР»Сѓ
 		while( read(descr[0], &(msg[i++]), 1) != '\0' ) ;
 
-        printf("Child: reading..\n\n");
-        sleep(0.5);
-        printf( "Child: read <%s>\n", msg );
+		printf("Child: reading..\n\n");
+		sleep(0.5);
+		printf( "Child: read <%s>\n", msg );
 	}
 	else
 	{
 		signal(SIGINT, parent_sigint_catcher);
 		
-        close( descr[0] ); //предок ничего не считает из канала
+		close( descr[0] ); //РїСЂРµРґРѕРє РЅРёС‡РµРіРѕ РЅРµ СЃС‡РёС‚Р°РµС‚ РёР· РєР°РЅР°Р»Р°
 
-		
-        printf( "Parent: waiting for CTRL+C signal for 3 seconds...\n" );
-        sleep(3);
+		printf( "Parent: waiting for CTRL+C signal for 3 seconds...\n" );
+		sleep(3);
 
-         if (parent_flag)
-         {
-             char msg[64] = "It`s my secret email for you, son. Father.";
-             write( descr[1], msg, strlen(msg) ); //передаём сообщение в канал
+		 if (parent_flag)
+		 {
+		     char msg[64] = "It`s my secret email for you, son. Father.";
+		     write( descr[1], msg, strlen(msg) ); //РїРµСЂРµРґР°С‘Рј СЃРѕРѕР±С‰РµРЅРёРµ РІ РєР°РЅР°Р»
 
-             exit(0);
+		     exit(0);
 
-         }
-         else
-         {
-             char msg[64] = "Hello my child!";
-             write( descr[1], msg, strlen(msg) ); //передаём сообщение в канал
-         }
+		 }
+		 else
+		 {
+		     char msg[64] = "Hello my child!";
+		     write( descr[1], msg, strlen(msg) ); //РїРµСЂРµРґР°С‘Рј СЃРѕРѕР±С‰РµРЅРёРµ РІ РєР°РЅР°Р»
+		 }
 		return 0;
 	}
 }
