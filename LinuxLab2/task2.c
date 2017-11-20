@@ -22,10 +22,8 @@ int main()
 	if ( child == 0 )
 	{
 		//потомственный код
+		sleep(2);
 		printf( "Child: pid=%d;	group=%d;	parent=%d\n", getpid(), getpgrp(), getppid() );
-		int ret_value = getpid() % 2;
-		printf( "Child: returning %d.\n", ret_value);
-		return ret_value;
 	}
 	else
 	{
