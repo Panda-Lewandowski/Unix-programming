@@ -28,7 +28,8 @@ void parent_sigint_catcher(int signum)
 void parent_sigterm_catcher(int signum)
 {
     printf("Parent waiting...");
-    wait();
+    int status;
+    wait(&status);
 }
 
 
