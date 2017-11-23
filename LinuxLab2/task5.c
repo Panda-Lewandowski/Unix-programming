@@ -25,6 +25,13 @@ void parent_sigint_catcher(int signum)
     parent_flag = 1;
 }
 
+void parent_sigterm_catcher(int signum)
+{
+    printf("Parent waiting...");
+    wait();
+}
+
+
 int main()
 {
 	int child;
@@ -63,6 +70,7 @@ int main()
 	else
 	{
 		signal(SIGINT, parent_sigint_catcher);
+		signal(SIGTERM, parent_sigterm_catcher);
 		
 		close( descr[0] ); //предок ничего не считает из канала
 
