@@ -12,26 +12,12 @@
 
 int parent_flag = 0;
 
-void child_sigint_catcher(int signum)
+void sigint_catcher(int signum)
 {
-    printf( "\nChild: Catched signal #%d\n", signum);
-    printf("Child: My father should send me secret email!\n");
-}
-
-void parent_sigint_catcher(int signum)
-{
-    printf( "\nParent: Catched signal #%d\n", signum);
-    printf("Parent: Sent secret email to my son!\n");
+    printf( "\nProccess Catched signal #%d\n", signum);
+    printf("Sent secret email to  son!\n");
     parent_flag = 1;
 }
-
-void parent_sigterm_catcher(int signum)
-{
-    printf("Parent waiting...");
-    int status;
-    wait(&status);
-}
-
 
 int main()
 {
@@ -39,6 +25,10 @@ int main()
 	int descr[2]; //дескриптор _одного_ программного канала
 	//[0] - выход для чтения, [1] - выход для записи
 	//потомок унаследует открытый программный канал предка
+
+	signal(SIGINT, sigint_catcher);
+	//signal(SIGCHLD, SIG_DFL);
+
 	if ( pipe(descr) == -1)
 	{
         	perror( "Couldn't pipe." );
@@ -53,7 +43,6 @@ int main()
 	}
 	if ( child == 0 )
 	{
-		signal(SIGINT, child_sigint_catcher);
 
 		close( descr[1] ); //потомок ничего не запишет в канал
 
@@ -65,13 +54,11 @@ int main()
 		while( read(descr[0], &(msg[i++]), 1) != '\0' ) ;
 
 		printf("Child: reading..\n\n");
-		sleep(0.5);
 		printf( "Child: read <%s>\n", msg );
 	}
 	else
 	{
-		signal(SIGINT, parent_sigint_catcher);
-		signal(SIGTERM, parent_sigterm_catcher);
+		
 		
 		close( descr[0] ); //предок ничего не считает из канала
 

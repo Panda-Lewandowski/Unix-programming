@@ -31,6 +31,7 @@ int main()
 		printf( "Parent: pid=%d;	group=%d;	child=%d\n", getpid(), getpgrp(), child );
 		int status;
 		pid_t ret_value;
+		
 		ret_value = wait( &status );
 		if ( WIFEXITED(status) )
 		    printf("Parent: child %d finished with %d code.\n", ret_value, WEXITSTATUS(status) );

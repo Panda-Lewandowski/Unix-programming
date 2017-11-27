@@ -58,10 +58,9 @@ int main()
 
 
         exit(0);
-    }
-
-
-	else
+	}
+	
+	if (child1 != 0 && child2 != 0)
 	{
 		//родительский код
 		close( descr[1] ); //предок ничего не считает из канала
@@ -77,6 +76,20 @@ int main()
 		int status;
 		pid_t ret_value;
 		ret_value = wait( &status );
+		if ( WIFEXITED(status) )
+		    printf("Parent: child %d finished with %d code.\n\n", ret_value, WEXITSTATUS(status) );
+		else if ( WIFSIGNALED(status) )
+		    printf( "Parent: child %d finished from signal with %d code.\n\n", ret_value, WTERMSIG(status));
+		else if ( WIFSTOPPED(status) )
+			printf("Parent: child %d finished from signal with %d code.\n\n", ret_value, WSTOPSIG(status));
+			
+		ret_value = wait( &status );
+		if ( WIFEXITED(status) )
+			printf("Parent: child %d finished with %d code.\n\n", ret_value, WEXITSTATUS(status) );
+		else if ( WIFSIGNALED(status) )
+			printf( "Parent: child %d finished from signal with %d code.\n\n", ret_value, WTERMSIG(status));
+		else if ( WIFSTOPPED(status) )
+			printf("Parent: child %d finished from signal with %d code.\n\n", ret_value, WSTOPSIG(status));
 
     }
 
