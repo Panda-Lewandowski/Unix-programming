@@ -7,7 +7,9 @@
 | ------------- |:-------------:|
 | Lab 1|✅|
 | Lab 2|✅|
-| Lab 3||
+| Linux Lab 1|✅|
+| Linux Lab 2||
+| Win Lab 1||
 
 > You can find tasks in lab's folders.
 
