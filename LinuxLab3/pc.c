@@ -90,7 +90,7 @@ int main()
 
 	if ((shmid = shmget(IPC_PRIVATE, (N + 1) * sizeof(int), IPC_CREAT | PERM)) == -1) 
 	{
-		printf("Error: unable to create a shared area.\n");
+		perror("!!! Unable to create a shared area.\n");
 		exit( 1 );
 	}
 
@@ -101,13 +101,13 @@ int main()
 	(*shared_position) = 0;
 	if (*shared_buffer == -1)
 	{
-		printf("Error: unable to connect to the shared area.\n");
+		perror("!!! Unable to connect to the shared area.\n");
 		exit( 1 );
 	}
 
 	if ((semid = semget(IPC_PRIVATE, 3, IPC_CREAT | PERM)) == -1) 
 	{
-		printf("Error: unable to create a semaphore.\n");
+		perror("!!! Unable to create a semaphore.\n");
 		exit( 1 );
 	}
 
@@ -125,7 +125,7 @@ int main()
 	pid_t pid;
 	if ((pid = fork()) == -1)
 	{
-		printf("Error: can't create new process.\n");
+		perror("!!! Can't create new process.\n");
 		exit( 1 );
 	}
 
