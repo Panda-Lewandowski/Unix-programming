@@ -8,20 +8,24 @@
 #include <string.h>
 #include <unistd.h>
 
-const int N = 10;  						
-const int COUNT = 5;					
+#define N     20  						
+#define COUNT 4
+#define ITER  10					
 const int PERM = S_IRWXU | S_IRWXG | S_IRWXO;	
 
 int* shared_buffer;
 int* shared_position;
 int* begin;
 
-enum SemIds {NReaders, ActiveWriter, MemCapture, WaitingWriters};
+enum SemIds { NReaders,  /* число активных читателей */
+ 			 ActiveWriter, 
+ 			 MemCapture, /* блокировка для исключения читетелей писателей */
+			 WaitingWriters };
 
 struct sembuf   start_read[] =  { { WaitingWriters, 0, 0 }, { ActiveWriter,    0, 0 }, { NReaders,     1, 0}};
 struct sembuf   start_write[] = { { WaitingWriters, 1, 0 }, { NReaders,        0, 0 }, { ActiveWriter, 1, 0}, 
 								  { MemCapture,    -1, 0 }, { WaitingWriters, -1, 0 } };	
-struct sembuf stop_read[]  =   { { NReaders,      -1, 0 } };
+struct sembuf stop_read[]  =    { { NReaders,      -1, 0 }  };
 struct sembuf stop_write[]  =   { { ActiveWriter,  -1, 0 }, { MemCapture,      1, 0 } };
 
 void start_reading(const int semid)
@@ -68,39 +72,50 @@ void stop_writing(const int semid)
 
 void writer(const int semid, const int value)
 {
-	sleep(rand() % 2);
 	
-	start_writing(semid);
+	for (int i = 0; i < ITER; ++i) {
+		start_writing(semid);
 
-	if (begin - shared_position > N)
-	{
-		shared_position = begin;
-		shared_buffer[*shared_position] = *shared_position;
-		printf("Writer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
-		(*shared_position)++;
-	}
-	else
-	{
-		shared_buffer[*shared_position] = *shared_position;
-		printf("Writer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
-		(*shared_position)++;
-	}
+		if (begin - shared_position > N)
+		{
+			shared_position = begin;
+			shared_buffer[*shared_position] = *shared_position;
+			printf("Writer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
+			(*shared_position)++;
+		}
+		else
+		{
+			shared_buffer[*shared_position] = *shared_position;
+			printf("Writer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
+			(*shared_position)++;
+		}
 
-	stop_writing(semid);
+		stop_writing(semid);
+		nice(15);
+
+	}
+	sleep(rand() % 2);
+	exit(0);
 	
 	
 }
 
 void reader(const int semid, const int value)
 {
-	sleep(rand() % 5);
-
-	start_reading(semid);
-
-	(*shared_position)--;
-	printf("Reader #%d <---- %d\n", value + 1, shared_buffer[*shared_position]);
 	
-	stop_reading(semid);
+	for (int i = 0; i < ITER; ++i) {
+
+		start_reading(semid);
+
+		(*shared_position)--;
+		printf("Reader #%d <---- %d\n", value + 1, shared_buffer[*shared_position]);
+		
+		stop_reading(semid); 
+		nice(15);
+
+	}
+	sleep(rand() % 5);
+	exit(0);
 	
 }
 
@@ -111,13 +126,18 @@ int main()
 	int parent_pid = getpid();
   	printf("Parent pid: %d\n", parent_pid);
 
-	if ((shmid = shmget(IPC_PRIVATE, (N + 1) * sizeof(int), IPC_CREAT | PERM)) == -1) 
+	if ((shmid = shmget(IPC_PRIVATE, 4, IPC_CREAT | PERM)) == -1) 
 	{
 		perror("!!! Unable to create a shared area.\n");
 		exit( 1 );
 	}
 
 	shared_position = shmat(shmid, 0, 0); 
+	if (*shared_position == -1)
+	{
+		perror("!!! Can't attach memory");
+		exit( 1 );
+	}
 	begin = shared_position;
 	shared_buffer = shared_position + sizeof(int); 
 
@@ -141,47 +161,65 @@ int main()
 
 	if ( ctrl_nr == -1 || ctrl_aw == -1 || ctrl_mc == -1 || ctrl_ww == -1)
 	{
-		printf("%d %d %d %d", ctrl_nr, ctrl_aw, ctrl_mc, ctrl_ww);
 		perror( "!!! Can't set control semaphors." );
 		exit( 1 );
 	}
 
 
 	pid_t pid;
-	if ((pid = fork()) == -1)
+
+	for (int i = 0 ; i < COUNT; ++i)
+		if ((pid = fork()) != -1)
+			if (!pid)
+				writer(semid ,i);
+			else
+				;
+		else
+			perror ("Fork error while creating writers!\n");
+			
+		
+	for (int i = 0; i < COUNT; ++i)
+		if ((pid = fork()) != -1)
+			if (!pid)
+				reader(semid , i);
+			else
+				;
+		else
+			perror ("Fork error while creating readers!\n");
+
+	// if ((pid = fork()) == -1)
+	// {
+	// 	perror("Error: can't create new process.\n");
+	// 	exit( 1 );
+	// }
+
+	// if (getpid() == 0)
+	// {
+	// 	int value = 0;
+	// 	while (value < COUNT)
+	// 	{
+	// 		reader(semid, value);
+	// 		value++;
+	// 	}
+	// }
+	// else 
+	// {
+	// 	int value = 0;
+	// 	while (value < COUNT) 
+	// 	{
+	// 		writer(semid, value);
+	// 		value++;
+	// 	}	
+	// }
+
+	while (wait(NULL) != -1) {}
+	
+	if (shmdt(shared_position) == -1) 
 	{
-		printf("Error: can't create new process.\n");
+		perror( "!!! Can't detach shared memory" );
 		exit( 1 );
 	}
+	
 
-	if (getpid() == 0)
-	{
-		int value = 0;
-		while (value < COUNT)
-		{
-			reader(semid, value);
-			value++;
-		}
-	}
-	else 
-	{
-		int value = 0;
-		while (value < COUNT) 
-		{
-			writer(semid, value);
-			value++;
-		}	
-	}
 
-	if (pid != 0) 
-	{
-		int status;
-		wait(&status);
-
-		if (shmdt(shared_position) == -1) 
-		{
-			perror( "!!! Can't detach shared memory" );
-			exit( 1 );
-		}
-	}
 }

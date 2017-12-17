@@ -95,6 +95,11 @@ int main()
 	}
 
 	shared_position = shmat(shmid, 0, 0); 
+	if (*shared_position == -1)
+	{
+		perror("!!! Can't attach memory");
+		exit( 1 );
+	}
 	begin = shared_position;
 	shared_buffer = shared_position + sizeof(int); 
 
