@@ -9,7 +9,8 @@
 #include <unistd.h>
 
 #define N     20  						
-#define COUNT 4
+#define READER 5
+#define WRITER 5
 #define ITER  10					
 const int PERM = S_IRWXU | S_IRWXG | S_IRWXO;	
 
@@ -168,7 +169,7 @@ int main()
 
 	pid_t pid;
 
-	for (int i = 0 ; i < COUNT; ++i)
+	for (int i = 0 ; i < WRITER; ++i)
 		if ((pid = fork()) != -1)
 			if (!pid)
 				writer(semid ,i);
@@ -178,7 +179,7 @@ int main()
 			perror ("Fork error while creating writers!\n");
 			
 		
-	for (int i = 0; i < COUNT; ++i)
+	for (int i = 0; i < READER; ++i)
 		if ((pid = fork()) != -1)
 			if (!pid)
 				reader(semid , i);

@@ -8,12 +8,13 @@
 #include <string.h>
 #include <unistd.h>
 
-const int N = 10;  						
-const int COUNT = 15;					
+const int N = 5;  						
+const int COUNT = 10;					
 const int PERM = S_IRWXU | S_IRWXG | S_IRWXO;	
 
 int* shared_buffer;
-int* shared_position;
+int* sh_pos_cons;
+int* sh_pos_prod;
 int* begin;
 
 #define SB 0
@@ -38,20 +39,11 @@ void producer(const int semid, const int value)
 		perror( "!!! Can't make operation on semaphors." );
 		exit( 1 );
 	}
+		
+	shared_buffer[*sh_pos_prod] = *sh_pos_prod;
+	printf("Producer #%d ----> %d\n", value, shared_buffer[*sh_pos_prod]);
+	(*sh_pos_prod)++;
 	
-	if (begin - shared_position > N)
-	{
-		shared_position = begin;
-		shared_buffer[*shared_position] = *shared_position;
-		printf("Producer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
-		(*shared_position)++;
-	}
-	else
-	{
-		shared_buffer[*shared_position] = *shared_position;
-		printf("Producer #%d ----> %d\n", value + 1, shared_buffer[*shared_position]);
-		(*shared_position)++;
-	}
 	
 	int sem_op_v = semop(semid, producer_stop, 2);
 	if ( sem_op_v == -1 )
@@ -70,8 +62,10 @@ void consumer(const int semid, const int value)
 		perror( "!!! Can't make operation on semaphors." );
 		exit( 1 );
 	}
-	(*shared_position)--;
-	printf("Consumer #%d <---- %d\n", value + 1, shared_buffer[*shared_position]);
+	
+	printf("Consumer #%d <---- %d\n", value, shared_buffer[*sh_pos_cons]);
+	(*sh_pos_cons)++;
+	//(*sh_pos_prod)--;
 	int sem_op_v = semop(semid, consumer_stop, 2);
 	if ( sem_op_v == -1 )
 	{
@@ -94,21 +88,20 @@ int main()
 		exit( 1 );
 	}
 
-	shared_position = shmat(shmid, 0, 0); 
-	if (*shared_position == -1)
+	sh_pos_prod = shmat(shmid, 0, 0); 
+	if (*sh_pos_prod == -1)
 	{
 		perror("!!! Can't attach memory");
 		exit( 1 );
 	}
-	begin = shared_position;
-	shared_buffer = shared_position + sizeof(int); 
 
-	(*shared_position) = 0;
-	if (*shared_buffer == -1)
-	{
-		perror("!!! Unable to connect to the shared area.\n");
-		exit( 1 );
-	}
+
+	shared_buffer = sh_pos_prod + 2 * sizeof(int); 
+	sh_pos_cons = sh_pos_prod + sizeof(int);
+
+	(*sh_pos_prod) = 0;
+	(*sh_pos_cons) = 0;
+	
 
 	if ((semid = semget(IPC_PRIVATE, 3, IPC_CREAT | PERM)) == -1) 
 	{
@@ -158,7 +151,7 @@ int main()
 		int status;
 		wait(&status);
 
-		if (shmdt(shared_position) == -1) 
+		if (shmdt(sh_pos_prod) == -1) 
 		{
 			perror( "!!! Can't detach shared memory" );
 			exit( 1 );
