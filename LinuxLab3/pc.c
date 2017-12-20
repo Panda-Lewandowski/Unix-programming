@@ -15,7 +15,6 @@ const int PERM = S_IRWXU | S_IRWXG | S_IRWXO;
 int* shared_buffer;
 int* sh_pos_cons;
 int* sh_pos_prod;
-int* begin;
 
 #define SB 0
 #define SE 1
@@ -65,7 +64,6 @@ void consumer(const int semid, const int value)
 	
 	printf("Consumer #%d <---- %d\n", value, shared_buffer[*sh_pos_cons]);
 	(*sh_pos_cons)++;
-	//(*sh_pos_prod)--;
 	int sem_op_v = semop(semid, consumer_stop, 2);
 	if ( sem_op_v == -1 )
 	{
