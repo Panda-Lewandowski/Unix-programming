@@ -31,7 +31,7 @@ struct sembuf consumer_stop[2] =  { {SE, V, 0}, {SF, V, 0} };
 
 void producer(const int semid, const int value)
 {
-	sleep(rand() % 2);
+	sleep(rand() % 5);
 	int sem_op_p = semop(semid, producer_start, 2);
 	if ( sem_op_p == -1 )
 	{
@@ -54,7 +54,7 @@ void producer(const int semid, const int value)
 
 void consumer(const int semid, const int value)
 {
-	sleep(rand() % 5);
+	sleep(rand() % 2);
 	int sem_op_p = semop(semid, consumer_start, 2);
 	if ( sem_op_p == -1 )
 	{

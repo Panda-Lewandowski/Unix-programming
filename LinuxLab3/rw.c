@@ -6,209 +6,147 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <signal.h>
 #include <unistd.h>
 
-#define N     20  						
-#define READER 5
-#define WRITER 3			
-const int PERM = S_IRWXU | S_IRWXG | S_IRWXO;	
+#define WRITERS 2
+#define READERS 4
 
-int* shared_buffer;
-int* sh_pos_reader;
-int* sh_pos_writer;
+#define ACT_READER 0
+#define ACT_WRITER 1
+#define BIN_ACT_WRITER 2
+#define WAIT_WRITER 3
 
-// София, [Dec 19, 2017, 8:06:02 PM]:
-// struct sembuf start_reader[5] = {{RR, 1, 0}, {SB, 0, 0}, {WR, 0, 0}, {RI, 1, 0}, {RR, -1, 0}},
+const int PERM =  S_IRWXU | S_IRWXG | S_IRWXO;
 
-//        stop_reader[1] = {{RI, -1, 0}},
 
-//        // уменьшаем кол-во ждущих читателей
-//        one_up[1] = {{SB, 1, 0}},
 
-//        start_writer_w[1] = {{WR, 1, 0}},
-//        start_writer_s[3] = {{RI, 0, 0}, {SB,  -1, 0}, {WR, -1, 0}},
-//        stop_writer[1]  = {{SB, 1, 0}, {RI, -1, 0}};
+struct sembuf start_read[] = {  { WAIT_WRITER, 0, 0 },
+                                  { ACT_WRITER,  0, 0 },
+                                  { ACT_READER,  1, 0 } };
 
-// #define RR  3 // ждущие читатели
-// #define SB  2 // бинарный
-// #define WR  1 // ждущие писатели
-// #define RI  0 // активные читатели
+struct sembuf  stop_read[] = { {ACT_READER, -1, 0} };
 
-enum SemIds { NReaders,  /* число активных читателей */
- 			 ActiveWriter,  /* активный писатель */ 
- 			 WaitingReaders, /* ждущий  читатель  */
-			 WaitingWriters }; /* ждущие писатели */ 
+struct sembuf  start_write[] = { { WAIT_WRITER,     1, 0 }, 
+                                   { ACT_READER,      0, 0 }, 
+                                   { BIN_ACT_WRITER, -1, 0 }, 
+                                   { ACT_WRITER,      1, 0 }, 
+                                   { WAIT_WRITER,    -1, 0 } };
 
-struct sembuf start_read[] =  { { WaitingReaders,  1, 0 }, 
-								{ ActiveWriter,   0, 0 }, 
-								{ WaitingWriters, 0, 0 }, 
-								{ WaitingReaders, -1, 0 },
-								{ NReaders, 	  1, 0 } };	
+struct sembuf  stop_write[] = { { ACT_WRITER,    -1, 0 }, 
+                                { BIN_ACT_WRITER, 1, 0 }};
 
-struct sembuf stop_read[]  =  { { NReaders,      -1, 0 } };
+#define SEM_COUNT(a) sizeof(a)/sizeof(struct sembuf )
 
-struct sembuf start_write[] = { { WaitingWriters,  1, 0 }, 
-								{ NReaders,        0, 0 }, 
-								{ ActiveWriter,   1, 0 },  
-								{ WaitingWriters, -1, 0 } };	
+void writer(int semid, int* shm, int num) {
+    nice(15);
+    while (1) 
+    {
 
-struct sembuf stop_write[] =  { { ActiveWriter, 0, 0 }, 
-								{ WaitingReaders, -1, 0 } 
-								};
+        semop(semid, start_write, SEM_COUNT(start_write));
 
-void start_reading(const int semid)
-{
-	int sem_op = semop(semid, start_read, 5);
-	if ( sem_op == -1 )
-	{
-		perror( "!!! Can't make operation on semaphors." );
-		exit( 1 );
-	}
+        (*shm)++;
+		printf("Writer #%d ----> %d\n", num, *shm);
 
+        semop(semid, stop_write, SEM_COUNT(stop_write));
+
+		sleep(rand() % 5);
+
+    }
 }
 
-void stop_reading(const int semid)
-{
-	int sem_op = semop(semid, stop_read, 1);
-	if ( sem_op == -1 )
-	{
-		perror( "!!! Can't make operation on semaphors." );
-		exit( 1 );
-	}
+void reader(int semid, int* shm, int num) {
 
+    while (1) 
+    {
+        semop(semid, start_read, SEM_COUNT(start_read));
+
+		printf("\tReader #%d <---- %d\n", num, *shm);
+
+        semop(semid, stop_read, SEM_COUNT(stop_read));
+
+		sleep(rand() % 3);
+
+    }
 }
 
-void start_writing(const int semid)
-{
-	int sem_op = semop(semid, start_write, 3);
-	if ( sem_op == -1 )
-	{
-		perror( "!!! Can't make operation on semaphors." );
-		exit( 1 );
-	}
-}
+int main() {
 
-void stop_writing(const int semid)
-{
-	int sem_op = semop(semid, stop_write, 1);
-	if ( sem_op == -1 )
-	{
-		perror( "!!! Can't make operation on semaphors." );
-		exit( 1 );
-	}
-}
+    srand( time( NULL ) );
 
-void writer(const int semid, const int value)
-{
-	start_writing(semid);
-
-	shared_buffer[*sh_pos_writer] = *sh_pos_writer;
-	printf("Writer #%d ----> %d\n", value, shared_buffer[*sh_pos_writer]);
-	(*sh_pos_writer)++;
-		
-
-	stop_writing(semid);
-	nice(15);
-
-	
-	sleep(rand() % 2);
-	exit(0);
-	
-	
-}
-
-void reader(const int semid, const int value)
-{
-	
-	start_reading(semid);
-
-	printf("Reader #%d <---- %d\n", value, shared_buffer[*sh_pos_reader]);
-	(*sh_pos_reader)++;
-		
-	stop_reading(semid); 
-	nice(15);
-
-	
-	sleep(rand() % 5);
-	exit(0);
-	
-}
-
-int main()
-{
-	int shmid, semid; 
-
-	int parent_pid = getpid();
+    int parent_pid = getpid();
   	printf("Parent pid: %d\n", parent_pid);
 
-	if ((shmid = shmget(IPC_PRIVATE, 4, IPC_CREAT | PERM)) == -1) 
+    int shm_id;
+    if ((shm_id = shmget(IPC_PRIVATE, 4, IPC_CREAT | PERM)) == -1) 
 	{
 		perror("!!! Unable to create a shared area.\n");
 		exit( 1 );
 	}
 
-	sh_pos_writer = shmat(shmid, 0, 0); 
-	if (*sh_pos_writer == -1)
-	{
-		perror("!!! Can't attach memory");
-		exit( 1 );
-	}
+    int *shm_buf = shmat(shm_id, 0, 0); 
+    if (shm_buf == (void*) -1) 
+    {
+        perror("!!! Can't attach memory");
+        exit( 1 );
+    }
 
+    (*shm_buf) = 0;
 
-	shared_buffer = sh_pos_writer + 2 * sizeof(int); 
-	sh_pos_reader = sh_pos_writer + sizeof(int);
-
-	(*sh_pos_writer) = 0;
-	(*sh_pos_reader) = 0;
-	
-
-	if ((semid = semget(IPC_PRIVATE, 4, IPC_CREAT | PERM)) == -1) 
+    int sem_id;
+    if ((sem_id = semget(IPC_PRIVATE, 4, IPC_CREAT | PERM)) == -1) 
 	{
 		perror("!!! Unable to create a semaphore.\n");
 		exit( 1 );
 	}
 
-	int ctrl_nr = semctl(semid, NReaders,       SETVAL, 0);
-    int ctrl_aw = semctl(semid, ActiveWriter,   SETVAL, 0);
-    int ctrl_mc = semctl(semid, WaitingReaders,  SETVAL, 0);
-    int ctrl_ww = semctl(semid, WaitingWriters, SETVAL, 0);
-
-	if ( ctrl_nr == -1 || ctrl_aw == -1 || ctrl_mc == -1 || ctrl_ww == -1)
+	int ctrl = semctl(sem_id, BIN_ACT_WRITER, SETVAL, 1);
+    if ( ctrl == -1)
 	{
-		printf("%d %d %d %d \n", ctrl_nr, ctrl_aw, ctrl_mc, ctrl_ww);
 		perror( "!!! Can't set control semaphors." );
 		exit( 1 );
 	}
 
-	pid_t pid;
+	pid_t pid = -1;
 
-	for (int i = 0 ; i < WRITER; ++i)
-		if ((pid = fork()) != -1)
-			if (!pid)
-				writer(semid ,i);
-			else
-				;
-		else
-			perror ("Fork error while creating writers!\n");
-			
-		
-	for (int i = 0; i < READER; ++i)
-		if ((pid = fork()) != -1)
-			if (!pid)
-				reader(semid , i);
-			else
-				;
-		else
-			perror ("Fork error while creating readers!\n");
-
-	while (wait(NULL) != -1) {}
-	
-	if (shmdt(sh_pos_writer) == -1) 
-	{
-		perror( "!!! Can't detach shared memory" );
-		exit( 1 );
+	for (int i = 0; i < WRITERS && pid != 0; i++) {
+        pid = fork();
+        if (pid == -1) {
+            perror("Writer's fork error.\n"); 
+            exit( 1 );
+        }
+        if (pid == 0) {
+            writer(sem_id, shm_buf, i);
+        }
 	}
-	
 
+    for (int i = 0; i < READERS && pid != 0; i++) {
+        pid = fork();
+        if (pid == -1) {
+            perror("Reader's fork error.\n"); 
+            exit( 1 );
+        }
+        if (pid == 0) {
+            reader(sem_id, shm_buf, i);
+        }
+	}
 
+    if (shmdt(shm_buf) == -1) {
+        perror( "!!! Can't detach shared memory" );
+        exit( 1 );
+    }
+
+    if (pid != 0) {
+        int *status;
+        for (int i = 0; i < WRITERS + READERS; ++i) {
+	        wait(status);
+        }
+        if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+            perror( "!!! Can't free memory!" );
+            exit( 1 );
+        }
+    }
+
+    return 0;
 }
