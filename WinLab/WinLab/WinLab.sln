@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.40629.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WinLab", "WinLab\WinLab.vcxproj", "{A0CC60A0-155F-4480-9CCD-474C68E84B1A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A0CC60A0-155F-4480-9CCD-474C68E84B1A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A0CC60A0-155F-4480-9CCD-474C68E84B1A}.Debug|Win32.Build.0 = Debug|Win32
+		{A0CC60A0-155F-4480-9CCD-474C68E84B1A}.Release|Win32.ActiveCfg = Release|Win32
+		{A0CC60A0-155F-4480-9CCD-474C68E84B1A}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
