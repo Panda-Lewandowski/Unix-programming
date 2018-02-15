@@ -9,6 +9,7 @@
 #include <signal.h> //sidaction
 #include <string.h> 
 #include <errno.h> 
+#include <sys/file.h>
 
 #define LOCKFILE "/var/run/daemon.pid"
 #define LOCKMODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) 
@@ -25,6 +26,9 @@ int lockfile(int fd)
 
 int already_running(void)
 {
+
+    syslog(LOG_ERR, "Проверка на многократный запуск!");
+
     int fd;
     char buf[16];
 
@@ -32,26 +36,39 @@ int already_running(void)
 
     if (fd < 0)
     {
-        syslog(LOG_ERR, "невозможно открыть %s: %s!\n", LOCKFILE, strerror(errno));
+        syslog(LOG_ERR, "невозможно открыть %s: %s!", LOCKFILE, strerror(errno));
         exit(1);
     }
 
-    if (lockfile(fd) < 0)
-    {
-        if (errno == EACCES || errno == EAGAIN)
-        {
-            close(fd);
-            exit(1);
-        }
+    syslog(LOG_WARNING, "Lock-файл открыт!");
 
-        syslog(LOG_ERR, "невозможно установить блокировку на %s: %s!\n", LOCKFILE, strerror(errno));
+    // if (lockfile(fd) < 0)
+    // {
+    //     if (errno == EACCES || errno == EAGAIN)
+    //     {
+    //         close(fd);
+    //         exit(1);
+    //     }
+
+    //     syslog(LOG_ERR, "невозможно установить блокировку на %s: %s!\n", LOCKFILE, strerror(errno));
+    //     exit(1);
+    // }
+    flock(fd, LOCK_EX | LOCK_UN);
+    if (errno == EWOULDBLOCK) {
+        syslog(LOG_ERR, "невозможно установить блокировку на %s: %s!", LOCKFILE, strerror(errno));
+        close(fd);
         exit(1);
     }
+
+    syslog(LOG_WARNING, "Записываем PID!");
 
     ftruncate(fd, 0);
     sprintf(buf, "%ld", (long)getpid());
     write(fd, buf, strlen(buf) + 1);
-    exit(0);
+
+    syslog(LOG_WARNING, "Записали PID!");
+     
+    return 0;
 }
 
 void daemonize(const char *cmd)
@@ -73,6 +90,7 @@ void daemonize(const char *cmd)
         perror("Ошибка функции fork!\n");
     else if (pid != 0) //родительский процесс
         exit(0);
+    
     setsid();
 
     // 4. Обеспечение невозможности обретения терминала в будущем 
@@ -82,10 +100,10 @@ void daemonize(const char *cmd)
     if (sigaction(SIGHUP, &sa, NULL) < 0)
         perror("Невозможно игнорировать сигнал SIGHUP!\n");
 
-    if ((pid = fork()) < 0)
-        perror("Ошибка функции fork!\n");
-    else if (pid != 0) //родительский процесс
-        exit(0);
+    // if ((pid = fork()) < 0)
+    //     perror("Ошибка функции fork!\n");
+    // else if (pid != 0) //родительский процесс
+    //     exit(0);
 
     // 5. Назначить корневой каталог текущим рабочим каталогом, 
     // чтобы впоследствии можно было отмонтировать файловую систему 
@@ -111,18 +129,26 @@ void daemonize(const char *cmd)
         exit(1);
     }
 
-    // 9. Блокировка файла дл одной существующей копии демона 
-    // if (already_running() == 0)
-    // {
-    //     syslog(LOG_ERR, "Демон уже запущен!\n");
-    //     exit(1);
-    // }
+    syslog(LOG_WARNING, "Демон запущен!");
+    
 }
 
 int main() 
 {
-    int a = 0;
     daemonize("pandorald");
-    while(1) a++;
-    exit(0);
+    // 9. Блокировка файла для одной существующей копии демона 
+    if (already_running() != 0)
+    {
+        syslog(LOG_ERR, "Демон уже запущен!\n");
+        exit(1);
+    }
+
+    syslog(LOG_WARNING, "Проверка пройдена!");
+    while(1) 
+    {
+        syslog(LOG_INFO, "••Демон••!");
+        sleep(5);
+    }
+
+
 }
