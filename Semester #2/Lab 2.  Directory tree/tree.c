@@ -8,139 +8,88 @@
 #include <sys/types.h> //stat
 #include <sys/stat.h> 
 
-
 #define FTW_F 1 //файл, не являющийся каталогом
 #define FTW_D 2 //каталог
 #define FTW_DNR 3 //каталог, недоступный для чтения
 #define FTW_NS 4 //файл, информацию о котором нельзя получить с помощью stat
-
-#define PATH_MAX_GUESS 1024
-
-#define SUSV3 200112L
-
-#ifdef PATH_MAX
-static int pathmax = PATH_MAX;
-#else
-static int pathmax = 0;
-#endif
-
-static long posix_version = 0;
 
 // функция, которая будет вызываться для каждого встреченного файла
 typedef int Handler(const char * ,const struct stat *, int);
 
 static Handler counter;
 static int my_ftw(char *, Handler * );
-static int dopath(Handler * );
-
-static char * fullpath; //полный путь к каждому из файлов
+static int dopath(const char* filename, int depth, Handler * );
 
 static long nreg, ndir, nblk, nchr, nfifo, nslink, nsock, ntot;
 
 int main(int argc, char * argv[])
 {
-   
+   int ret = -1; 
    if (argc != 2)
       perror("Использование: ftw <начальный каталог>");
-   
-   int ret; 
 
    ret = my_ftw(argv[1], counter); //выполняет всю работу
 
    ntot = nreg + ndir +  nblk + nchr +  nfifo + nslink + nsock;
 
-    printf("%ld %ld %ld %ld %ld %ld %ld %ld\n", nreg, ndir, nblk, nchr, nfifo, nslink, nsock, ntot);
+    if (ntot == 0)
+		ntot = 1; //во избежание деления на 0; вывести 0 для всех счетчиков
+	
+	printf("_______________________________\nSummary:\n\n");
+	printf("common files:\t%7ld, %5.2f %%\n", nreg, nreg*100.0/ntot);
+	printf("catalogs:\t%7ld, %5.2f %%\n", ndir, ndir*100.0/ntot);
+	printf("block-devices:\t%7ld, %5.2f %%\n", nblk, nblk*100.0/ntot);
+	printf("char-devices:\t%7ld, %5.2f %%\n", nchr, nchr*100.0/ntot);
+	printf("FIFOs:\t\t%7ld, %5.2f %%\n", nfifo, nfifo*100.0/ntot);
+	printf("sym-links:\t%7ld, %5.2f %%\n", nslink, nslink*100.0/ntot);
+	printf("sockets:\t%7ld, %5.2f %%\n\n", nsock, nsock*100.0/ntot);
+    printf("Total:\t%7ld\n", ntot);
 
     exit(ret);
 }
 
-char * path_alloc(int *sizep)
-{
-   char *ptr;
-   int size;
-
-    if (posix_version == 0)
-        posix_version = sysconf(_SC_VERSION);
-   
-    if (pathmax == 0) 
-    {
-        errno = 0;
-        if ((pathmax = pathconf("/", _PC_PATH_MAX)) < 0) 
-        {
-            if(errno == 0)
-                pathmax = PATH_MAX_GUESS;
-            else
-                perror("pathconf error for _PC_PATH_MAX");
-        } else 
-        {
-            pathmax++;
-        }
-    }
-      
-    if (posix_version < SUSV3)
-        size = pathmax + 1;
-    else
-        size = pathmax;
-    
-    if ((ptr = malloc(size)) == NULL)
-        perror("malloc error for pathname");
-    
-    if(sizep != NULL)
-        *sizep = size;
-    
-    return(ptr);
-}
-
-
 //обоходит дерево каталогов, начиная с pathname и применяя к каждому файлу func
 static int my_ftw(char * pathname, Handler * func)
 {
-    int len;
-    fullpath = path_alloc(&len);
-    strncpy(fullpath, pathname, len); //защита от переполнения
-    fullpath[len-1] = 0;            //буфера
-    return(dopath(func));
+    return(dopath(pathname, 0, func));
 } 
 
 //обход дерева каталогов, начиная с fullpath
-static int dopath(Handler * func)
+static int dopath(const char* filename, int depth, Handler * func)
 {
     struct stat statbuf;
     struct dirent * dirp;
     DIR * dp;
     int ret;
-    char * ptr;
 
-    if (lstat(fullpath, &statbuf) < 0) //ошибка вызова функции lstat   
-        return(func(fullpath, &statbuf, FTW_NS));
+    if (lstat(filename, &statbuf) < 0) //ошибка вызова функции lstat   
+        return(func(filename, &statbuf, FTW_NS));
+
+    for (int i = 0; i < depth; ++i)
+		printf("         |");
 
     if (S_ISDIR(statbuf.st_mode) == 0) //не каталог 
-        return(func(fullpath, &statbuf, FTW_F));
+        return(func(filename, &statbuf, FTW_F)); //отобразить в дереве 
 
-    if ((ret = func(fullpath, &statbuf, FTW_D)) != 0)
+    if ((ret = func(filename, &statbuf, FTW_D)) != 0)
         return(ret);
 
-    ptr = fullpath + strlen(fullpath); //установить указатель в конец fullpath
-
-    *ptr++ = '/';
-    *ptr = 0;
-
-    if ((dp = opendir(fullpath)) == NULL) //каталог недоступен
-        return(func(fullpath, &statbuf, FTW_DNR));
+    if ((dp = opendir(filename)) == NULL) //каталог недоступен
+        return(func(filename, &statbuf, FTW_DNR));
     
+    chdir(filename);
     while ((dirp = readdir(dp)) != NULL)
     {
         if (strcmp(dirp->d_name, ".") == 0 ||
             strcmp(dirp->d_name, "..") == 0 )
             continue; //пропустить каталоги . и ..
-
-        strcpy(ptr, dirp->d_name); //добавить имя после слеша
-
-        if ((ret = dopath(func)) != 0) //рекурсия
+        
+        if ((ret = dopath(dirp->d_name, depth+1, func)) != 0) //рекурсия
             break; // выход по ошибке
     }
+    
+    chdir("..");
 
-    ptr[-1] = 0; //стереть часть строки от слеша и до конца
 
     if (closedir(dp) < 0)
         perror("Невозможно закрыть каталог");
@@ -153,6 +102,7 @@ static int counter(const char* pathame, const struct stat * statptr, int type)
     switch(type)
     {
         case FTW_F: 
+            printf( ">> %s\n", pathame);
             switch(statptr->st_mode & S_IFMT)
             {
                 case S_IFREG: nreg++; break;
@@ -165,7 +115,8 @@ static int counter(const char* pathame, const struct stat * statptr, int type)
                     perror("Католог имеет тип FTW_F"); return(-1);
             }
             break;
-        case FTW_D:
+        case FTW_D: 
+            printf( ">>>>> %s >>>>>\n", pathame);
             ndir++; break;
         case FTW_DNR:
             perror("Закрыт доступ к одному из каталогов!"); return(-1);
