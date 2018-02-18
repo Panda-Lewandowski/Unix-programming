@@ -26,7 +26,11 @@ int main(int argc, char * argv[])
 {
    int ret = -1; 
    if (argc != 2)
-      perror("Использование: ftw <начальный каталог>");
+   {
+      printf("Использование: ftw <начальный каталог>\n");
+      exit(-1);
+   }
+
 
    ret = my_ftw(argv[1], counter); //выполняет всю работу
 
