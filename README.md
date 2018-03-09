@@ -21,7 +21,8 @@
 
 | List of Labs  |     Stage     |
 | ------------- |:-------------:|
-|Lab 1. Daemon|⚠️ |
+|Lab 1. Daemon| ✅|
+|Lab2. Tree| ⚠️|
 
 > You can find tasks in lab's folders.
 
