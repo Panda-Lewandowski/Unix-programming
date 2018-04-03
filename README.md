@@ -25,7 +25,7 @@
 |Lab2. Tree| ⚠️|
 |Lab3. LKM| ✅|
 |Lab4. FS| |
-|Lab4. Open| |
+|Lab5. Open| |
 
 
 > You can find tasks in lab's folders.
