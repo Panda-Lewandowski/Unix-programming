@@ -23,6 +23,10 @@
 | ------------- |:-------------:|
 |Lab 1. Daemon| ✅|
 |Lab2. Tree| ⚠️|
+|Lab3. LKM| ✅|
+|Lab4. FS| |
+|Lab4. Open| |
+
 
 > You can find tasks in lab's folders.
 
