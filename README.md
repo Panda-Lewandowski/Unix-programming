@@ -22,10 +22,10 @@
 | List of Labs  |     Stage     |
 | ------------- |:-------------:|
 |Lab 1. Daemon| ✅|
-|Lab2. Tree| ⚠️|
-|Lab3. LKM| ✅|
-|Lab4. FS| |
-|Lab5. Open| |
+|Lab 2. Tree| ⚠️|
+|Lab 3. LKM| ✅|
+|Lab 4. FS| |
+|Lab 5. Open| |
 
 
 > You can find tasks in lab's folders.
