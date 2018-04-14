@@ -12,15 +12,13 @@
 
 using namespace std;
 
-//#include "stack.h"
-
 #define FTW_F 1 //файл, не являющийся каталогом
 #define FTW_D 2 //каталог
 #define FTW_DNR 3 //каталог, недоступный для чтения
 #define FTW_NS 4 //файл, информацию о котором нельзя получить с помощью stat
 
 // функция, которая будет вызываться для каждого встреченного файла
-typedef void Handler(const char * ,const struct stat *, int);
+typedef void Handler(const char * , int, int);
 
 static Handler counter;
 static int my_ftw(char *, Handler * );
@@ -68,107 +66,104 @@ static int my_ftw(char * pathname, Handler * func)
 //обход дерева каталогов, начиная с fullpath
 static int dopath(const char* filename, int depth, Handler * func)
 {
-    struct stat statbuf;
     struct dirent * dirp;
     DIR * dp;
     int ret;
     const char * curr;
+    const char * next;
     const char * to_ret;
     //Stack<const char *> dir_stack(1024);
     stack<const char *> dir_stack;
         
     dir_stack.push(filename);
+    next = "";
+
+    
 
     
     while (!dir_stack.empty())
     {
-        
-        //curr = dir_stack.pop();
-        curr = dir_stack.top(); 
-        dir_stack.pop();  
+        curr = dir_stack.top();  
+        dir_stack.pop(); 
+        if (dir_stack.size() > 0)
+            next = dir_stack.top();
+        else
+            next = "";
 
         if ((dp = opendir(curr)) == NULL) //каталог недоступен
         {
             if(strcmp("", curr) != 0)
-                func(curr, &statbuf, FTW_DNR);
+                func(curr, DT_DIR, FTW_DNR);
             continue;
         }
         else
         {
-            chdir(curr); 
-            func(curr, &statbuf, FTW_D);  
+            for (int i = 0; i < depth; ++i)
+                printf("         |");
+            chdir(curr);
+            depth++; 
+            func(curr, DT_DIR, FTW_D);
             while ((dirp = readdir(dp)) != NULL)
             {
                 if (strcmp(dirp->d_name, ".") == 0 ||
                     strcmp(dirp->d_name, "..") == 0 ||
                     strcmp(dirp->d_name, ".DS_Store") == 0)
                     continue; //пропустить каталоги . и ..
-                          
-
-                    //stat(dirp->d_name, &statbuf);
                                 
-                    // for (int i = 0; i < depth; ++i)
-                    //     printf("         |");
+                    for (int i = 0; i < depth; ++i)
+                        printf("         |");
 
                     if (dirp->d_type != DT_DIR) //не каталог 
                     {
-                        func(dirp->d_name, &statbuf, FTW_F); //отобразить в дереве 
+                        func(dirp->d_name, dirp->d_type, FTW_F); //отобразить в дереве 
                     }
                     else
                     {  
-                        //char* a;
-                        //cout << dir_stack.size() << ": "<<  dirp->d_name  << ": " << getwd(a) << "\n\n";
                         dir_stack.push(dirp->d_name);
                     }
                     
                     
             }
             
-            depth++;   
-                  
-
             if (closedir(dp) < 0)
                 perror("Невозможно закрыть каталог");
 
-
-            if(strcmp(dir_stack.top(), curr) == 0)
-            {    
-                chdir("..");
+            if(dir_stack.size() > 0)
+            {
+                if (strcmp(dir_stack.top(), next) == 0)
+                {    
+                    chdir("..");
+                    depth--;
+                }
             }
-
         }
-
-        char* a;
-        cout << dir_stack.size() << ": " << dir_stack.top() << ": " << getwd(a) << "\n\n";
       
     };
-
     return(ret);    
 }
 
-static void counter(const char* pathname, const struct stat * statptr, int type)
+static void counter(const char* pathname, int stat, int type)
 {
     switch(type)
     {
         case FTW_F: 
-            printf("    |%s\n", pathname);
-            switch(statptr->st_mode & S_IFMT)
+            printf("%s\n", pathname);
+            switch(stat)
             {
-                case S_IFREG: nreg++; break;
-                case S_IFBLK: nblk++; break;
-                case S_IFCHR: nchr++; break;
-                case S_IFIFO: nfifo++; break;
-                case S_IFLNK: nslink++; break;
-                case S_IFSOCK: nsock++; break;
-                case S_IFDIR: 
+                case DT_REG: nreg++; break;
+                case DT_BLK: nblk++; break;
+                case DT_CHR: nchr++; break;
+                case DT_FIFO: nfifo++; break;
+                case DT_LNK: nslink++; printf("_____\n");break;
+                case DT_SOCK: nsock++; break;
+                case DT_DIR: 
                     perror("Католог имеет тип FTW_F"); break;
             }
             break;
         case FTW_D: 
-            printf( ">>>>> %s >>>>>\n", pathname);
+            printf(">> %s\n", pathname);
             ndir++; break;
         case FTW_DNR:
-            printf( "_____ %s ______\n", pathname);
             perror("Закрыт доступ к одному из каталогов!"); break;
         case FTW_NS:
             perror("Ошибка функции stat!"); break;
