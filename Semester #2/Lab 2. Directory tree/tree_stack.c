@@ -36,17 +36,17 @@ static int fileTree(char* pathname)
 	while ((st->len != 0) && flag)
 	{
 		path = pullStack(st);
-		if (strcmp(path, "../") == 0)
+		if (strcmp(path, "..") == 0)
 		{
 			lvl--;
-			chdir("../");
+			chdir("..");
 		}
 		else
 		{
-			pushStack(st, "../");
+			pushStack(st, "..");
 			for (int i = 0; i < lvl; i++)
-				printf("\t");
-			printf("%s/\n", path);
+				printf("|\t");
+			printf("|%s/\n", path);
 			chdir(path);
 			lvl++;
 			getcwd(workpath, PATH_MAX);
@@ -72,8 +72,8 @@ static int fileTree(char* pathname)
 						else
 						{
 							for (int i = 0; i < lvl; i++)
-								printf("\t");
-							printf("%s\n", dirp->d_name);
+								printf("|\t");
+							printf("|%s\n", dirp->d_name);
 						}
 					}
 				}

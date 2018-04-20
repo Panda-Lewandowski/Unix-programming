@@ -1,0 +1,59 @@
+# Соберем модуль ядра 
+make
+echo ">>>>> Making pfs.ko..."
+echo
+sleep 0.8
+
+# Загрузим модуль ядра 
+sudo insmod pfs.ko
+echo ">>>>> Loading pfs.ko..."
+echo
+sleep 0.8
+
+echo ">>>>> Modules PFS was loaded. Let's look at this: "
+
+# Выведем список загружен модулей ядра, чье название содержит строку «pfs» 
+lsmod | grep pfs
+echo
+sleep 0.8
+
+# Посмотрим последние 5 сообщений, выведенных модулями ядра
+echo ">>>>> This is the last 5 lines in the system log: "
+dmesg | tail -5
+echo
+read -n 1 -s -r -p "Press any key to continue..."
+echo
+
+echo ">>>>> Preparing for PFS...(loop device and root dir)"
+touch image
+mkdir pfs_root
+sleep 0.8
+
+echo ">>>>> Let's mount PFS.."
+sudo mount -o loop -t pfs ./image ./pfs_root
+sleep 0.8
+
+# Посмотрим последние 5 сообщений, выведенных модулями ядра
+echo ">>>>> This is the last 5 lines in the system log: "
+dmesg | tail -5
+echo
+read -n 1 -s -r -p "Press any key to continue..."
+echo
+
+echo ">>>>> Let's unmount PFS..."
+sudo umount ./pfs_root
+sleep 0.8
+
+# Выгрузим pfs модули ядра 
+echo ">>>>> Remove pfs..."
+sudo rmmod pfs
+echo
+sleep 0.8
+
+# Посмотрим последние 5 сообщений, выведенных модулями ядра
+echo ">>>>> This is the last 5 lines in the system log: "
+dmesg | tail -5
+echo
+read -n 1 -s -r -p "Press any key to exit..."
+echo
+
