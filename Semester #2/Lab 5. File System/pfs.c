@@ -23,26 +23,39 @@ static void pfs_put_super(struct super_block *sb)
 
 static struct super_operations const pfs_super_ops = {
     .put_super = pfs_put_super,
+    .statfs = simple_statfs ,
+    .drop_inode = generic_delete_inode ,
 };
+
+static struct inode *pfs_make_inode(struct super_block *sb, int mode)
+{
+    struct inode *ret = new_inode(sb);
+    if (ret) {
+        inode_init_owner(ret, NULL, mode); 
+        ret->i_size = PAGE_SIZE;
+        ret->i_atime = ret->i_mtime = ret->i_ctime = current_time(ret);
+    }
+return ret; 
+}
 
 static int pfs_fill_sb(struct super_block *sb, void *data, int silent)
 {
     struct inode *root = NULL;
 
+    sb->s_blocksize = PAGE_SIZE; 
+    sb->s_blocksize_bits = PAGE_SHIFT;
     sb->s_magic = PFS_MAGIC_NUMBER;
     sb->s_op = &pfs_super_ops;
 
-    root = new_inode(sb);
+    root = pfs_make_inode(sb, S_IFDIR | 0755);
     if (!root)
     {
         printk(KERN_ERR "inode allocation failed!\n");
        return -ENOMEM;
     }
 
-    root->i_ino = 0;
-    root->i_sb = sb;
-    root->i_atime = root->i_mtime = root->i_ctime = CURRENT_TIME;
-    inode_init_owner(root, NULL, S_IFDIR);
+    root->i_op = &simple_dir_inode_operations; 
+    root->i_fop = &simple_dir_operations;
 
     sb->s_root = d_make_root(root);
     if (!sb->s_root)
