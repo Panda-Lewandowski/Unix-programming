@@ -1,0 +1,28 @@
+make
+echo
+sleep 0.8
+
+# Загрузим модули ядра 
+echo ">>>>> Loading queue.ko..."
+insmod queue.ko irq=12
+
+# Выведем список загружен модулей ядра, чье название содержит строку «tasklet» 
+lsmod | grep queue
+echo
+sleep 1
+
+# Посмотрим последние 15 сообщений, выведенных модулями ядра
+echo ">>>>> This is the last 15 lines in the system log: "
+dmesg | tail -15
+echo
+read -n 1 -s -r -p "Press any key to continue..."
+echo
+
+# Выгрузим модуль ядра 
+echo ">>>>> Remove queue.ko..."
+rmmod queue
+echo
+sleep 0.8
+
+# Посмотрим последние 5 сообщений, выведенных модулями ядра
+dmesg | tail -5
