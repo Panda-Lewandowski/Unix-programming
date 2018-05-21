@@ -22,10 +22,13 @@
 | List of Labs  |     Stage     |
 | ------------- |:-------------:|
 |Lab 1. Daemon| ✅|
-|Lab 2. Tree| ⚠️|
+|Lab 2. Tree|✅|
 |Lab 3. LKM| ✅|
-|Lab 4. FS| |
-|Lab 5. Open| |
+|Lab 4. Open| ✅|
+|Lab 5. File System| ✅|
+|Lab 6. Proc| ✅|
+|Lab 7. Sockets| 🌀|
+|Lab 8. Interrupt handlers| 🌀|
 
 
 > You can find tasks in lab's folders.
